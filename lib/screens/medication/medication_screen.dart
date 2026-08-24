@@ -7,6 +7,7 @@ import '../../core/widgets/primary_button.dart';
 import '../../models/medication.dart';
 import '../../services/medication_service.dart';
 import 'medication_form_screen.dart';
+import 'prn_medication_log_form_screen.dart';
 
 class MedicationScreen extends StatelessWidget {
   const MedicationScreen({super.key, required this.service});
@@ -19,6 +20,7 @@ class MedicationScreen extends StatelessWidget {
       animation: service,
       builder: (context, _) {
         final items = service.todayDoseItems;
+        final prnMedications = service.activePrnMedications;
         return Scaffold(
           appBar: AppBar(
             title: const Text('오늘의 복약'),
@@ -56,7 +58,7 @@ class MedicationScreen extends StatelessWidget {
                         ),
                       ),
                     )
-                  else
+                  else ...[
                     for (final slot in MedicationTimeSlot.values)
                       if (items.any((item) => item.timeSlot == slot)) ...[
                         _TimeSlotGroup(
@@ -72,6 +74,14 @@ class MedicationScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: AppSpacing.lg),
                       ],
+                    if (prnMedications.isNotEmpty)
+                      _PrnMedicationGroup(
+                        medications: prnMedications,
+                        service: service,
+                        onRecord: (medication) =>
+                            _openPrnRecord(context, medication),
+                      ),
+                  ],
                 ],
               ),
             ),
@@ -90,6 +100,20 @@ class MedicationScreen extends StatelessWidget {
   Future<void> _openForm(BuildContext context) async {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => MedicationFormScreen(service: service)),
+    );
+  }
+
+  Future<void> _openPrnRecord(
+    BuildContext context,
+    Medication medication,
+  ) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PrnMedicationLogFormScreen(
+          service: service,
+          medication: medication,
+        ),
+      ),
     );
   }
 }
@@ -236,10 +260,10 @@ class _MedicationDoseRow extends StatelessWidget {
                   medication.name,
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
-                if (medication.dose != null) ...[
+                if (medication.displayDose != null) ...[
                   const SizedBox(height: AppSpacing.xxs),
                   Text(
-                    medication.dose!,
+                    medication.displayDose!,
                     style: Theme.of(context).textTheme.bodyMedium
                         ?.copyWith(color: AppColors.secondaryText),
                   ),
@@ -270,6 +294,105 @@ class _MedicationDoseRow extends StatelessWidget {
   }
 }
 
+class _PrnMedicationGroup extends StatelessWidget {
+  const _PrnMedicationGroup({
+    required this.medications,
+    required this.service,
+    required this.onRecord,
+  });
+
+  final List<Medication> medications;
+  final MedicationService service;
+  final ValueChanged<Medication> onRecord;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('필요 시 복용약', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            children: [
+              for (var i = 0; i < medications.length; i++) ...[
+                _PrnMedicationRow(
+                  medication: medications[i],
+                  logs: service.prnLogsForMedication(medications[i].id),
+                  onRecord: () => onRecord(medications[i]),
+                ),
+                if (i != medications.length - 1)
+                  const Divider(height: 1, color: AppColors.border),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PrnMedicationRow extends StatelessWidget {
+  const _PrnMedicationRow({
+    required this.medication,
+    required this.logs,
+    required this.onRecord,
+  });
+
+  final Medication medication;
+  final List<PrnMedicationLog> logs;
+  final VoidCallback onRecord;
+
+  @override
+  Widget build(BuildContext context) {
+    final latest = logs.isEmpty ? null : logs.first;
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  medication.name,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                if (medication.displayDose != null) ...[
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    medication.displayDose!,
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(color: AppColors.secondaryText),
+                  ),
+                ],
+                if (latest != null) ...[
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    '오늘 ${logs.length}회 복용 · ${_formatTime(latest.takenAt)}',
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: AppColors.secondaryText),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          OutlinedButton(
+            key: ValueKey('prn-record-${medication.id}'),
+            onPressed: onRecord,
+            child: const Text('복용 기록'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MedicationListItem extends StatelessWidget {
   const _MedicationListItem({required this.medication, required this.onTap});
 
@@ -278,6 +401,10 @@ class _MedicationListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheduleText = medication.isPrn
+        ? '필요 시(PRN)'
+        : '정기 · ${medication.timeSlots.map((slot) => slot.label).join(' · ')}';
+
     return Material(
       key: ValueKey('medication-${medication.id}'),
       color: AppColors.surface,
@@ -301,18 +428,16 @@ class _MedicationListItem extends StatelessWidget {
                       medication.name,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    if (medication.dose != null) ...[
+                    if (medication.displayDose != null) ...[
                       const SizedBox(height: AppSpacing.xxs),
                       Text(
-                        medication.dose!,
+                        medication.displayDose!,
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ],
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      medication.timeSlots
-                          .map((slot) => slot.label)
-                          .join(' · '),
+                      scheduleText,
                       style: Theme.of(context).textTheme.bodyMedium
                           ?.copyWith(color: AppColors.secondaryText),
                     ),
@@ -333,4 +458,10 @@ String _formatDate(DateTime date) {
   final month = date.month.toString().padLeft(2, '0');
   final day = date.day.toString().padLeft(2, '0');
   return '$year.$month.$day';
+}
+
+String _formatTime(DateTime date) {
+  final hour = date.hour.toString().padLeft(2, '0');
+  final minute = date.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
 }

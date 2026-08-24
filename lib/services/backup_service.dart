@@ -26,11 +26,13 @@ class BackupSnapshot {
     required this.medications,
     required this.medicationLogs,
     required this.labResults,
+    this.prnMedicationLogs = const [],
   });
 
   final List<HealthRecord> healthRecords;
   final List<Medication> medications;
   final List<MedicationLog> medicationLogs;
+  final List<PrnMedicationLog> prnMedicationLogs;
   final List<LabResult> labResults;
 
   Map<String, Object?> toJson() {
@@ -40,6 +42,7 @@ class BackupSnapshot {
           .map((medication) => medication.toMap())
           .toList(),
       'medicationLogs': medicationLogs.map((log) => log.toMap()).toList(),
+      'prnMedicationLogs': prnMedicationLogs.map((log) => log.toMap()).toList(),
       'labResults': labResults.map((result) => result.toMap()).toList(),
     };
   }
@@ -60,12 +63,20 @@ class BackupSnapshot {
       'medicationLogs',
       MedicationLog.fromMap,
     );
+    final prnMedicationLogs = _readOptionalCollection(
+      json,
+      'prnMedicationLogs',
+      PrnMedicationLog.fromMap,
+    );
     final labResults = _readCollection(json, 'labResults', LabResult.fromMap);
 
     final medicationIds = medications.map((item) => item.id).toSet();
     if (medicationLogs.any(
-      (log) => !medicationIds.contains(log.medicationId),
-    )) {
+          (log) => !medicationIds.contains(log.medicationId),
+        ) ||
+        prnMedicationLogs.any(
+          (log) => !medicationIds.contains(log.medicationId),
+        )) {
       throw const BackupValidationException('백업 데이터가 손상되어 복원할 수 없습니다.');
     }
 
@@ -73,6 +84,7 @@ class BackupSnapshot {
       healthRecords: healthRecords,
       medications: medications,
       medicationLogs: medicationLogs,
+      prnMedicationLogs: prnMedicationLogs,
       labResults: labResults,
     );
   }
@@ -86,6 +98,26 @@ class BackupSnapshot {
     if (value is! List) {
       throw const BackupValidationException('백업 데이터가 손상되어 복원할 수 없습니다.');
     }
+    return _parseCollection(value, parse);
+  }
+
+  static List<T> _readOptionalCollection<T>(
+    Map<String, Object?> json,
+    String key,
+    T Function(Map<String, Object?> map) parse,
+  ) {
+    final value = json[key];
+    if (value == null) return [];
+    if (value is! List) {
+      throw const BackupValidationException('백업 데이터가 손상되어 복원할 수 없습니다.');
+    }
+    return _parseCollection(value, parse);
+  }
+
+  static List<T> _parseCollection<T>(
+    List<Object?> value,
+    T Function(Map<String, Object?> map) parse,
+  ) {
     try {
       return [
         for (final item in value)
@@ -112,7 +144,8 @@ class BackupDocument {
   });
 
   static const appName = 'My Health Log';
-  static const backupVersion = 1;
+  static const backupVersion = 2;
+  static const supportedBackupVersions = {1, 2};
 
   final DateTime createdAt;
   final String appVersion;
@@ -122,6 +155,7 @@ class BackupDocument {
     return snapshot.healthRecords.length +
         snapshot.medications.length +
         snapshot.medicationLogs.length +
+        snapshot.prnMedicationLogs.length +
         snapshot.labResults.length;
   }
 
@@ -156,7 +190,8 @@ class BackupDocument {
     if (!json.containsKey('backupVersion')) {
       throw const BackupValidationException('백업 데이터가 손상되어 복원할 수 없습니다.');
     }
-    if (json['backupVersion'] != backupVersion) {
+    final version = json['backupVersion'];
+    if (version is! int || !supportedBackupVersions.contains(version)) {
       throw const BackupValidationException('지원하지 않는 백업 버전입니다.');
     }
     final data = json['data'];
@@ -187,6 +222,7 @@ class SqfliteBackupRepository implements BackupRepository {
   static const _healthRecordsTable = 'health_records';
   static const _medicationsTable = 'medications';
   static const _medicationLogsTable = 'medication_logs';
+  static const _prnMedicationLogsTable = 'prn_medication_logs';
   static const _labResultsTable = 'lab_results';
 
   @override
@@ -204,12 +240,17 @@ class SqfliteBackupRepository implements BackupRepository {
       _medicationLogsTable,
       orderBy: 'date ASC, timeSlot ASC',
     );
+    final prnLogRows = await db.query(
+      _prnMedicationLogsTable,
+      orderBy: 'takenAt ASC',
+    );
     final labRows = await db.query(_labResultsTable, orderBy: 'date DESC');
 
     return BackupSnapshot(
       healthRecords: healthRows.map(HealthRecord.fromMap).toList(),
       medications: medicationRows.map(Medication.fromMap).toList(),
       medicationLogs: logRows.map(MedicationLog.fromMap).toList(),
+      prnMedicationLogs: prnLogRows.map(PrnMedicationLog.fromMap).toList(),
       labResults: labRows.map(LabResult.fromMap).toList(),
     );
   }
@@ -218,6 +259,7 @@ class SqfliteBackupRepository implements BackupRepository {
   Future<void> replaceWith(BackupSnapshot snapshot) async {
     final db = await AppDatabase.open();
     await db.transaction((txn) async {
+      await txn.delete(_prnMedicationLogsTable);
       await txn.delete(_medicationLogsTable);
       await txn.delete(_medicationsTable);
       await txn.delete(_healthRecordsTable);
@@ -231,6 +273,9 @@ class SqfliteBackupRepository implements BackupRepository {
       }
       for (final log in snapshot.medicationLogs) {
         await txn.insert(_medicationLogsTable, log.toMap());
+      }
+      for (final log in snapshot.prnMedicationLogs) {
+        await txn.insert(_prnMedicationLogsTable, log.toMap());
       }
       for (final result in snapshot.labResults) {
         await txn.insert(_labResultsTable, result.toMap());
@@ -321,15 +366,12 @@ class BackupService {
       type: FileType.custom,
       allowedExtensions: ['json'],
     );
-    if (result == null || result.files.isEmpty) {
-      return null;
-    }
+    if (result == null || result.files.isEmpty) return null;
     final path = result.files.single.path;
     if (path == null) {
       throw const BackupValidationException('백업 파일을 읽을 수 없습니다.');
     }
-    final text = await File(path).readAsString();
-    return validateBackup(text);
+    return validateBackup(await File(path).readAsString());
   }
 
   String backupFileName(DateTime date) {

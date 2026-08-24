@@ -12,6 +12,22 @@ class EmptyMedicationTimeSlotException implements Exception {
   const EmptyMedicationTimeSlotException();
 }
 
+class InvalidMedicationDoseException implements Exception {
+  const InvalidMedicationDoseException();
+}
+
+class InvalidPrnMedicationException implements Exception {
+  const InvalidPrnMedicationException();
+}
+
+class FuturePrnMedicationDateException implements Exception {
+  const FuturePrnMedicationDateException();
+}
+
+class FuturePrnMedicationTimeException implements Exception {
+  const FuturePrnMedicationTimeException();
+}
+
 class DuplicateMedicationLogException implements Exception {
   const DuplicateMedicationLogException();
 }
@@ -20,6 +36,8 @@ abstract class MedicationStorage {
   Future<List<Medication>> fetchActiveMedications();
   Future<List<MedicationLog>> fetchLogsForDate(DateTime date);
   Future<List<MedicationLog>> fetchAllLogs();
+  Future<List<PrnMedicationLog>> fetchPrnLogsForDate(DateTime date);
+  Future<List<PrnMedicationLog>> fetchAllPrnLogs();
   Future<void> insertMedication(Medication medication);
   Future<void> updateMedication(Medication medication);
   Future<void> updateMedicationActive(
@@ -28,6 +46,8 @@ abstract class MedicationStorage {
     DateTime updatedAt,
   );
   Future<void> upsertMedicationLog(MedicationLog log);
+  Future<void> insertPrnMedicationLog(PrnMedicationLog log);
+  Future<void> deletePrnMedicationLog(String id);
 }
 
 class MedicationService extends ChangeNotifier {
@@ -36,10 +56,19 @@ class MedicationService extends ChangeNotifier {
   final MedicationStorage _storage;
   final List<Medication> _activeMedications = [];
   final Map<String, MedicationLog> _logsByKey = {};
+  final List<PrnMedicationLog> _prnLogsForLoadedDate = [];
   DateTime _loadedDate = _today();
 
   List<Medication> get activeMedications =>
       List.unmodifiable(_activeMedications);
+
+  List<Medication> get activeScheduledMedications => List.unmodifiable(
+    _activeMedications.where((medication) => medication.isScheduled),
+  );
+
+  List<Medication> get activePrnMedications => List.unmodifiable(
+    _activeMedications.where((medication) => medication.isPrn),
+  );
 
   Future<void> load({DateTime? date}) async {
     _loadedDate = _normalize(date ?? DateTime.now());
@@ -52,6 +81,10 @@ class MedicationService extends ChangeNotifier {
         (await _storage.fetchLogsForDate(_loadedDate))
             .map((log) => MapEntry(log.uniqueKey, log)),
       );
+    _prnLogsForLoadedDate
+      ..clear()
+      ..addAll(await _storage.fetchPrnLogsForDate(_loadedDate));
+    _sortPrnLogs();
     notifyListeners();
   }
 
@@ -59,17 +92,24 @@ class MedicationService extends ChangeNotifier {
     final dateKey = MedicationLog.formatDateKey(date);
     return [
       for (final medication in _activeMedications)
-        for (final slot in MedicationTimeSlot.values)
-          if (medication.isScheduledFor(slot))
-            MedicationDoseItem(
-              medication: medication,
-              timeSlot: slot,
-              log: _logsByKey['${medication.id}|$dateKey|${slot.value}'],
-            ),
+        if (medication.isScheduled)
+          for (final slot in MedicationTimeSlot.values)
+            if (medication.isScheduledFor(slot))
+              MedicationDoseItem(
+                medication: medication,
+                timeSlot: slot,
+                log: _logsByKey['${medication.id}|$dateKey|${slot.value}'],
+              ),
     ];
   }
 
   List<MedicationDoseItem> get todayDoseItems => doseItemsForDate(_loadedDate);
+
+  List<PrnMedicationLog> prnLogsForMedication(String medicationId) {
+    return List.unmodifiable(
+      _prnLogsForLoadedDate.where((log) => log.medicationId == medicationId),
+    );
+  }
 
   MedicationLog? logFor(
     String medicationId,
@@ -86,17 +126,36 @@ class MedicationService extends ChangeNotifier {
     if (name.isEmpty) {
       throw const EmptyMedicationNameException();
     }
-    if (!medication.hasAnyTimeSlot) {
+    if (medication.isScheduled && !medication.hasAnyTimeSlot) {
       throw const EmptyMedicationTimeSlotException();
     }
 
+    final doseValue = medication.doseValue;
+    final doseUnit = medication.doseUnit;
+    if (doseValue != null &&
+        (!doseValue.isFinite || doseValue <= 0 || doseUnit == null)) {
+      throw const InvalidMedicationDoseException();
+    }
+
+    final legacyDose = medication.dose?.trim();
+    final normalizedDose = doseValue != null && doseUnit != null
+        ? '${Medication.formatDoseValue(doseValue)}${doseUnit.label}'
+        : (legacyDose == null || legacyDose.isEmpty ? null : legacyDose);
+
     final normalized = medication.copyWith(
       name: name,
-      dose: medication.dose?.trim().isEmpty == true
-          ? null
-          : medication.dose?.trim(),
-      clearDose: medication.dose?.trim().isEmpty == true,
+      dose: normalizedDose,
+      clearDose: normalizedDose == null,
+      doseValue: doseValue,
+      clearDoseValue: doseValue == null,
+      doseUnit: doseValue == null ? null : doseUnit,
+      clearDoseUnit: doseValue == null,
+      morning: medication.isPrn ? false : medication.morning,
+      lunch: medication.isPrn ? false : medication.lunch,
+      evening: medication.isPrn ? false : medication.evening,
+      bedtime: medication.isPrn ? false : medication.bedtime,
     );
+
     final index = _activeMedications.indexWhere(
       (item) => item.id == normalized.id,
     );
@@ -129,6 +188,10 @@ class MedicationService extends ChangeNotifier {
     DateTime? date,
     DateTime? now,
   }) async {
+    if (!medication.isScheduled) {
+      throw const InvalidPrnMedicationException();
+    }
+
     final currentDate = _normalize(date ?? _loadedDate);
     final currentNow = now ?? DateTime.now();
     final key =
@@ -157,7 +220,71 @@ class MedicationService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<PrnMedicationLog> recordPrnTaken({
+    required Medication medication,
+    required DateTime takenAt,
+    double? doseValue,
+    MedicationDoseUnit? doseUnit,
+    String? note,
+    DateTime? now,
+  }) async {
+    if (!medication.isPrn) {
+      throw const InvalidPrnMedicationException();
+    }
+
+    final currentNow = now ?? DateTime.now();
+    final currentDate = _normalize(currentNow);
+    final takenDate = _normalize(takenAt);
+    if (takenDate.isAfter(currentDate)) {
+      throw const FuturePrnMedicationDateException();
+    }
+    if (takenAt.isAfter(currentNow)) {
+      throw const FuturePrnMedicationTimeException();
+    }
+    if (doseValue != null &&
+        (!doseValue.isFinite || doseValue <= 0 || doseUnit == null)) {
+      throw const InvalidMedicationDoseException();
+    }
+
+    final normalizedNote = note?.trim();
+    final log = PrnMedicationLog(
+      id: 'prnlog-${currentNow.microsecondsSinceEpoch}',
+      medicationId: medication.id,
+      date: takenDate,
+      takenAt: takenAt,
+      doseValue: doseValue,
+      doseUnit: doseValue == null ? null : doseUnit,
+      note: normalizedNote == null || normalizedNote.isEmpty
+          ? null
+          : normalizedNote,
+      createdAt: currentNow,
+      updatedAt: currentNow,
+    );
+
+    await _storage.insertPrnMedicationLog(log);
+    if (MedicationLog.formatDateKey(takenDate) ==
+        MedicationLog.formatDateKey(_loadedDate)) {
+      _prnLogsForLoadedDate.add(log);
+      _sortPrnLogs();
+    }
+    notifyListeners();
+    return log;
+  }
+
+  Future<void> deletePrnLog(String id) async {
+    await _storage.deletePrnMedicationLog(id);
+    _prnLogsForLoadedDate.removeWhere((log) => log.id == id);
+    notifyListeners();
+  }
+
   Future<List<MedicationLog>> allLogsForTest() => _storage.fetchAllLogs();
+
+  Future<List<PrnMedicationLog>> allPrnLogsForTest() =>
+      _storage.fetchAllPrnLogs();
+
+  void _sortPrnLogs() {
+    _prnLogsForLoadedDate.sort((a, b) => b.takenAt.compareTo(a.takenAt));
+  }
 
   static DateTime _today() => _normalize(DateTime.now());
 
@@ -168,6 +295,7 @@ class MedicationService extends ChangeNotifier {
 class SqfliteMedicationStorage implements MedicationStorage {
   static const _medicationsTable = 'medications';
   static const _logsTable = 'medication_logs';
+  static const _prnLogsTable = 'prn_medication_logs';
 
   Database? _database;
 
@@ -209,6 +337,25 @@ class SqfliteMedicationStorage implements MedicationStorage {
     final db = await _db;
     final rows = await db.query(_logsTable, orderBy: 'date ASC, timeSlot ASC');
     return rows.map(MedicationLog.fromMap).toList();
+  }
+
+  @override
+  Future<List<PrnMedicationLog>> fetchPrnLogsForDate(DateTime date) async {
+    final db = await _db;
+    final rows = await db.query(
+      _prnLogsTable,
+      where: 'date = ?',
+      whereArgs: [MedicationLog.formatDateKey(date)],
+      orderBy: 'takenAt DESC',
+    );
+    return rows.map(PrnMedicationLog.fromMap).toList();
+  }
+
+  @override
+  Future<List<PrnMedicationLog>> fetchAllPrnLogs() async {
+    final db = await _db;
+    final rows = await db.query(_prnLogsTable, orderBy: 'takenAt ASC');
+    return rows.map(PrnMedicationLog.fromMap).toList();
   }
 
   @override
@@ -259,17 +406,32 @@ class SqfliteMedicationStorage implements MedicationStorage {
       rethrow;
     }
   }
+
+  @override
+  Future<void> insertPrnMedicationLog(PrnMedicationLog log) async {
+    final db = await _db;
+    await db.insert(_prnLogsTable, log.toMap());
+  }
+
+  @override
+  Future<void> deletePrnMedicationLog(String id) async {
+    final db = await _db;
+    await db.delete(_prnLogsTable, where: 'id = ?', whereArgs: [id]);
+  }
 }
 
 class InMemoryMedicationStorage implements MedicationStorage {
   InMemoryMedicationStorage({
     List<Medication>? medications,
     List<MedicationLog>? logs,
+    List<PrnMedicationLog>? prnLogs,
   }) : _medications = List.of(medications ?? const []),
-       _logs = List.of(logs ?? const []);
+       _logs = List.of(logs ?? const []),
+       _prnLogs = List.of(prnLogs ?? const []);
 
   final List<Medication> _medications;
   final List<MedicationLog> _logs;
+  final List<PrnMedicationLog> _prnLogs;
 
   @override
   Future<List<Medication>> fetchActiveMedications() async {
@@ -284,6 +446,17 @@ class InMemoryMedicationStorage implements MedicationStorage {
 
   @override
   Future<List<MedicationLog>> fetchAllLogs() async => List.of(_logs);
+
+  @override
+  Future<List<PrnMedicationLog>> fetchPrnLogsForDate(DateTime date) async {
+    final key = MedicationLog.formatDateKey(date);
+    final result = _prnLogs.where((log) => log.dateKey == key).toList()
+      ..sort((a, b) => b.takenAt.compareTo(a.takenAt));
+    return result;
+  }
+
+  @override
+  Future<List<PrnMedicationLog>> fetchAllPrnLogs() async => List.of(_prnLogs);
 
   @override
   Future<void> insertMedication(Medication medication) async {
@@ -329,5 +502,15 @@ class InMemoryMedicationStorage implements MedicationStorage {
     } else {
       _logs[index] = log;
     }
+  }
+
+  @override
+  Future<void> insertPrnMedicationLog(PrnMedicationLog log) async {
+    _prnLogs.add(log);
+  }
+
+  @override
+  Future<void> deletePrnMedicationLog(String id) async {
+    _prnLogs.removeWhere((log) => log.id == id);
   }
 }

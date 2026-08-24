@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_health_log/models/health_record.dart';
 import 'package:my_health_log/models/lab_result.dart';
@@ -17,23 +19,23 @@ void main() {
 
       expect(decoded.appVersion, 'test-version');
       expect(decoded.totalCount, 0);
-      expect(decoded.toJson()['backupVersion'], 1);
+      expect(decoded.toJson()['backupVersion'], 2);
       expect(decoded.snapshot.healthRecords, isEmpty);
       expect(decoded.snapshot.medications, isEmpty);
       expect(decoded.snapshot.medicationLogs, isEmpty);
+      expect(decoded.snapshot.prnMedicationLogs, isEmpty);
       expect(decoded.snapshot.labResults, isEmpty);
     });
 
     test('uses stable timestamped JSON backup file name', () {
       final service = BackupService(repository: InMemoryBackupRepository());
-
       expect(
         service.backupFileName(_dateTime()),
         'my_health_log_backup_20260824_103045.json',
       );
     });
 
-    test('preserves all entity fields in backup JSON', () async {
+    test('preserves all legacy entity fields in backup JSON', () async {
       final snapshot = _snapshot();
       final service = BackupService(
         repository: InMemoryBackupRepository(snapshot),
@@ -49,8 +51,108 @@ void main() {
         HealthCondition.bad,
       );
       expect(decoded.snapshot.medications.single.dose, '긴 용량 메모 !@# 한글');
+      expect(
+        decoded.snapshot.medications.single.type,
+        MedicationType.scheduled,
+      );
       expect(decoded.snapshot.medicationLogs.single.isTaken, isTrue);
       expect(decoded.snapshot.labResults.single.unit, 'mg/dL');
+    });
+
+    test(
+      'V3 PRN medication and PRN log round-trip without data loss',
+      () async {
+        final now = _dateTime();
+        final medication = Medication(
+          id: 'prn-med',
+          name: '편두통약',
+          type: MedicationType.prn,
+          dose: '0.5정',
+          doseValue: 0.5,
+          doseUnit: MedicationDoseUnit.tablet,
+          morning: false,
+          lunch: false,
+          evening: false,
+          bedtime: false,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        );
+        final snapshot = BackupSnapshot(
+          healthRecords: const [],
+          medications: [medication],
+          medicationLogs: const [],
+          prnMedicationLogs: [
+            PrnMedicationLog(
+              id: 'prn-log',
+              medicationId: medication.id,
+              date: DateTime(2026, 8, 24),
+              takenAt: DateTime(2026, 8, 24, 14, 20),
+              doseValue: 0.5,
+              doseUnit: MedicationDoseUnit.tablet,
+              note: '두통',
+              createdAt: now,
+              updatedAt: now,
+            ),
+          ],
+          labResults: const [],
+        );
+        final service = BackupService(
+          repository: InMemoryBackupRepository(snapshot),
+        );
+
+        final decoded = service.validateBackup(
+          (await service.createBackup(createdAt: now)).toPrettyJson(),
+        );
+
+        expect(decoded.snapshot.medications.single.type, MedicationType.prn);
+        expect(decoded.snapshot.medications.single.displayDose, '0.5정');
+        expect(decoded.snapshot.prnMedicationLogs, hasLength(1));
+        expect(decoded.snapshot.prnMedicationLogs.single.displayDose, '0.5정');
+        expect(decoded.snapshot.prnMedicationLogs.single.note, '두통');
+      },
+    );
+
+    test('accepts V2 backupVersion 1 and defaults missing V3 fields', () {
+      final service = BackupService(repository: InMemoryBackupRepository());
+      final legacy = jsonEncode({
+        'app': 'My Health Log',
+        'backupVersion': 1,
+        'createdAt': '2026-08-24T10:30:45.000',
+        'appVersion': '1.0.1+2',
+        'data': {
+          'healthRecords': <Object?>[],
+          'medications': [
+            {
+              'id': 'legacy-med',
+              'name': '기존약',
+              'dose': '0.5정',
+              'morning': 1,
+              'lunch': 0,
+              'evening': 0,
+              'bedtime': 0,
+              'isActive': 1,
+              'createdAt': '2026-08-24T09:00:00.000',
+              'updatedAt': '2026-08-24T09:00:00.000',
+            },
+          ],
+          'medicationLogs': <Object?>[],
+          'labResults': <Object?>[],
+        },
+      });
+
+      final decoded = service.validateBackup(legacy);
+
+      expect(
+        decoded.snapshot.medications.single.type,
+        MedicationType.scheduled,
+      );
+      expect(decoded.snapshot.medications.single.doseValue, 0.5);
+      expect(
+        decoded.snapshot.medications.single.doseUnit,
+        MedicationDoseUnit.tablet,
+      );
+      expect(decoded.snapshot.prnMedicationLogs, isEmpty);
     });
 
     test('rejects invalid backup files', () {
@@ -62,7 +164,7 @@ void main() {
       );
       expect(
         () => service.validateBackup(
-          '{"app":"Other","backupVersion":1,"data":{}}',
+          '{"app":"Other","backupVersion":2,"data":{}}',
         ),
         throwsA(isA<BackupValidationException>()),
       );
@@ -78,7 +180,7 @@ void main() {
       );
       expect(
         () => service.validateBackup(
-          '{"app":"My Health Log","backupVersion":1,"createdAt":"2026-01-01T00:00:00.000","appVersion":"1","data":{"healthRecords":{}}}',
+          '{"app":"My Health Log","backupVersion":2,"createdAt":"2026-01-01T00:00:00.000","appVersion":"1","data":{"healthRecords":{}}}',
         ),
         throwsA(isA<BackupValidationException>()),
       );
@@ -177,6 +279,7 @@ extension on BackupSnapshot {
     return healthRecords.length +
         medications.length +
         medicationLogs.length +
+        prnMedicationLogs.length +
         labResults.length;
   }
 }

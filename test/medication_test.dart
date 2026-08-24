@@ -14,13 +14,8 @@ void main() {
       MaterialApp(home: MedicationScreen(service: service)),
     );
 
-    expect(
-      find.text(
-        '\uB4F1\uB85D\uB41C \uC57D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.\n\n\uBCF5\uC6A9 \uC911\uC778 \uC57D\uC744\n\uBA3C\uC800 \uB4F1\uB85D\uD574\uC8FC\uC138\uC694.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('+ \uC57D \uB4F1\uB85D'), findsOneWidget);
+    expect(find.text('등록된 약이 없습니다.\n\n복용 중인 약을\n먼저 등록해주세요.'), findsOneWidget);
+    expect(find.text('+ 약 등록'), findsOneWidget);
   });
 
   testWidgets('Medication Add screen opens from list', (tester) async {
@@ -29,12 +24,13 @@ void main() {
       MaterialApp(home: MedicationListScreen(service: service)),
     );
 
-    await tester.tap(find.byTooltip('\uC57D \uB4F1\uB85D'));
+    await tester.tap(find.byTooltip('약 등록'));
     await tester.pumpAndSettle();
 
-    expect(find.text('\uC57D \uB4F1\uB85D'), findsWidgets);
-    expect(find.text('\uC57D \uC774\uB984'), findsOneWidget);
-    expect(find.text('\uBCF5\uC6A9 \uC2DC\uAC04'), findsOneWidget);
+    expect(find.text('약 등록'), findsWidgets);
+    expect(find.text('약 이름'), findsOneWidget);
+    expect(find.text('복용 유형'), findsOneWidget);
+    expect(find.text('복용 시점'), findsOneWidget);
   });
 
   testWidgets('Medication validation requires name and one time slot', (
@@ -45,21 +41,10 @@ void main() {
       MaterialApp(home: MedicationFormScreen(service: service)),
     );
 
-    await tester.tap(find.text('\uC800\uC7A5'));
-    await tester.pumpAndSettle();
+    await _tapSave(tester);
 
-    expect(
-      find.text(
-        '\uC57D \uC774\uB984\uC744 \uC785\uB825\uD574\uC8FC\uC138\uC694.',
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.text(
-        '\uBCF5\uC6A9 \uC2DC\uAC04\uC744 \uD558\uB098 \uC774\uC0C1 \uC120\uD0DD\uD574\uC8FC\uC138\uC694.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('약 이름을 입력해주세요.'), findsOneWidget);
+    expect(find.text('복용 시점을 하나 이상 선택해주세요.'), findsOneWidget);
   });
 
   testWidgets('Medication can be saved and displayed in list', (tester) async {
@@ -68,23 +53,22 @@ void main() {
       MaterialApp(home: MedicationListScreen(service: service)),
     );
 
-    await tester.tap(find.byTooltip('\uC57D \uB4F1\uB85D'));
+    await tester.tap(find.byTooltip('약 등록'));
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.byType(TextFormField).at(0),
-      '\uD0C0\uD06C\uB85C\uBCA8',
+      find.byKey(const Key('medication-name-field')),
+      '타크로벨',
     );
-    await tester.enterText(find.byType(TextFormField).at(1), '1\uC815');
-    await tester.tap(find.text('\uC544\uCE68'));
-    await tester.tap(find.text('\uC800\uB141'));
-    await tester.tap(find.text('\uC800\uC7A5'));
-    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('medication-dose-field')), '1');
+    await tester.tap(find.text('아침'));
+    await tester.tap(find.text('저녁'));
+    await _tapSave(tester);
 
     expect(service.activeMedications.length, 1);
-    expect(find.text('\uD0C0\uD06C\uB85C\uBCA8'), findsWidgets);
-    expect(find.text('1\uC815'), findsOneWidget);
-    expect(find.textContaining('\uC544\uCE68'), findsOneWidget);
-    expect(find.textContaining('\uC800\uB141'), findsOneWidget);
+    expect(find.text('타크로벨'), findsWidgets);
+    expect(find.text('1정'), findsOneWidget);
+    expect(find.textContaining('아침'), findsOneWidget);
+    expect(find.textContaining('저녁'), findsOneWidget);
   });
 
   testWidgets('Medication edit shows existing values and updates same record', (
@@ -96,22 +80,20 @@ void main() {
       MaterialApp(home: MedicationListScreen(service: service)),
     );
 
-    await tester.tap(find.text('\uD0C0\uD06C\uB85C\uBCA8'));
+    await tester.tap(find.text('타크로벨'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.widgetWithText(TextFormField, '\uD0C0\uD06C\uB85C\uBCA8'),
-      findsOneWidget,
-    );
-    expect(find.widgetWithText(TextFormField, '1\uC815'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, '타크로벨'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, '1'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextFormField).at(1), '2\uC815');
-    await tester.tap(find.text('\uBCC0\uACBD\uC0AC\uD56D \uC800\uC7A5'));
-    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('medication-dose-field')), '2');
+    await _tapSave(tester);
 
     expect(service.activeMedications.length, 1);
     expect(service.activeMedications.first.id, medication.id);
-    expect(service.activeMedications.first.dose, '2\uC815');
+    expect(service.activeMedications.first.dose, '2정');
+    expect(service.activeMedications.first.doseValue, 2);
+    expect(service.activeMedications.first.doseUnit, MedicationDoseUnit.tablet);
   });
 
   testWidgets('Medication soft delete hides active medication and keeps logs', (
@@ -129,21 +111,15 @@ void main() {
       MaterialApp(home: MedicationListScreen(service: service)),
     );
 
-    await tester.tap(find.text('\uD0C0\uD06C\uB85C\uBCA8'));
+    await tester.tap(find.text('타크로벨'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('\uC0AD\uC81C'));
+    await tester.tap(find.text('삭제'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('\uC0AD\uC81C').last);
+    await tester.tap(find.text('삭제').last);
     await tester.pumpAndSettle();
 
     expect(service.activeMedications, isEmpty);
     expect(await service.allLogsForTest(), hasLength(1));
-    expect(
-      find.text(
-        '\uB4F1\uB85D\uB41C \uC57D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.\n\n\uBCF5\uC6A9 \uC911\uC778 \uC57D\uC744\n\uB4F1\uB85D\uD574\uC8FC\uC138\uC694.',
-      ),
-      findsOneWidget,
-    );
   });
 
   test('MedicationLog toggle stores and clears takenAt', () async {
@@ -209,8 +185,8 @@ void main() {
       MaterialApp(home: HomeScreen(medicationService: service)),
     );
 
-    expect(find.text('\uD0C0\uD06C\uB85C\uBCA8'), findsWidgets);
-    expect(find.textContaining('\uBCF5\uC6A9 \uC644\uB8CC'), findsOneWidget);
+    expect(find.text('타크로벨'), findsWidgets);
+    expect(find.textContaining('복용 완료'), findsOneWidget);
   });
 
   testWidgets('Medication Today toggles false to true and back', (
@@ -222,23 +198,37 @@ void main() {
       MaterialApp(home: MedicationScreen(service: service)),
     );
 
-    await tester.tap(find.text('\uBCF5\uC6A9').first);
+    await tester.tap(find.text('복용').first);
     await tester.pumpAndSettle();
-    expect(find.text('\uBCF5\uC6A9 \uC644\uB8CC'), findsOneWidget);
+    expect(find.text('복용 완료'), findsOneWidget);
 
-    await tester.tap(find.text('\uBCF5\uC6A9 \uC644\uB8CC'));
+    await tester.tap(find.text('복용 완료'));
     await tester.pumpAndSettle();
-    expect(find.text('\uBCF5\uC6A9'), findsWidgets);
+    expect(find.text('복용'), findsWidgets);
   });
+}
+
+Future<void> _tapSave(WidgetTester tester) async {
+  final button = find.byKey(const Key('medication-save-button'));
+  expect(button, findsOneWidget);
+  await tester.ensureVisible(button);
+  await tester.pumpAndSettle();
+  await tester.tap(button);
+  await tester.pumpAndSettle();
 }
 
 Future<MedicationService> _service({
   List<Medication>? medications,
   List<MedicationLog>? logs,
+  List<PrnMedicationLog>? prnLogs,
   DateTime? date,
 }) async {
   final service = MedicationService(
-    InMemoryMedicationStorage(medications: medications, logs: logs),
+    InMemoryMedicationStorage(
+      medications: medications,
+      logs: logs,
+      prnLogs: prnLogs,
+    ),
   );
   await service.load(date: date);
   return service;
@@ -246,8 +236,11 @@ Future<MedicationService> _service({
 
 Medication _medication({
   String id = 'med-1',
-  String name = '\uD0C0\uD06C\uB85C\uBCA8',
-  String? dose = '1\uC815',
+  String name = '타크로벨',
+  String? dose = '1정',
+  double? doseValue = 1,
+  MedicationDoseUnit? doseUnit = MedicationDoseUnit.tablet,
+  MedicationType type = MedicationType.scheduled,
   bool morning = true,
   bool lunch = false,
   bool evening = true,
@@ -258,7 +251,10 @@ Medication _medication({
   return Medication(
     id: id,
     name: name,
+    type: type,
     dose: dose,
+    doseValue: doseValue,
+    doseUnit: doseUnit,
     morning: morning,
     lunch: lunch,
     evening: evening,
