@@ -291,11 +291,11 @@ V2 상세 문서는 `docs/v2/`에서 확인할 수 있습니다.
 
 ## Release
 
-- Current Version: `1.0.1+2`
-- Current Release Type: Internal Portfolio V2 Release
-- Current Release APK: `release/v1.0.1/MyHealthLog-v1.0.1.apk`
-- Current Release Notes: `release/v1.0.1/RELEASE_NOTES.md`
-- Current SHA256: `release/v1.0.1/SHA256.txt`
+- Current Version: `2.0.0+3`
+- Current Release Type: Public V2 Release
+- Current Release APK: GitHub Release asset for tag `v2.0.0`
+- Current Release Notes: `release/v2.0.0/RELEASE_NOTES.md`
+- Current SHA256: `release/v2.0.0/SHA256.txt`
 
 V1 baseline artifact remains available:
 
@@ -304,7 +304,7 @@ V1 baseline artifact remains available:
 - V1 Release Notes: `release/v1.0.0/RELEASE_NOTES.md`
 - V1 SHA256: `release/v1.0.0/SHA256.txt`
 
-APK 다운로드 링크나 외부 배포 링크는 이 README에 포함하지 않습니다.
+APK binary files are not tracked in the source repository. Public APK downloads are provided as GitHub Release assets.
 
 ## 개인정보 및 의료 기능 범위
 

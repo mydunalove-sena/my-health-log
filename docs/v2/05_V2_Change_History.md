@@ -54,4 +54,5 @@
 - Actual Android share sheet and document picker behavior must be manually verified on device.
 - Real-device ADB sideload QA must target User 0 explicitly on Samsung devices that expose DUAL_APP or Secure Folder users.
 - `flutter --version --suppress-analytics` did not return in this shell session, although `flutter pub get`, `flutter analyze`, and `flutter test` executed successfully.
+- Public release preparation uses version `2.0.0+3` and publishes APK binaries as GitHub Release assets instead of tracked source files.
 - `flutter build apk --debug` did not return cleanly in this shell session, but direct Gradle `assembleDebug` completed successfully.
