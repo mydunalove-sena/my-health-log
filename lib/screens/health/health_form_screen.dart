@@ -251,11 +251,14 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
   }
 
   Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final initialDate = _selectedDate.isAfter(today) ? today : _selectedDate;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate,
+      initialDate: initialDate,
       firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      lastDate: today,
     );
     if (picked != null) {
       setState(() {
@@ -339,6 +342,11 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
 
     try {
       await widget.service.save(record);
+    } on FutureHealthRecordDateException {
+      setState(() {
+        _formError = '미래 날짜에는 건강 기록을 저장할 수 없습니다.';
+      });
+      return;
     } on DuplicateHealthRecordException {
       setState(() {
         _formError = '같은 날짜의 건강 기록이 이미 있습니다.';

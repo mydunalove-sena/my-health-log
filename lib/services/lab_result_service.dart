@@ -16,6 +16,10 @@ class DuplicateLabResultException implements Exception {
   const DuplicateLabResultException();
 }
 
+class FutureLabResultDateException implements Exception {
+  const FutureLabResultDateException();
+}
+
 abstract class LabResultStorage {
   Future<List<LabResult>> fetchAll();
   Future<void> insert(LabResult result);
@@ -29,12 +33,14 @@ class LabResultService extends ChangeNotifier {
   final LabResultStorage _storage;
   final List<LabResult> _results = [];
 
-  List<LabResult> get results => List.unmodifiable(_results);
+  List<LabResult> get results => List.unmodifiable(
+    _results.where((result) => !_isFutureDate(result.date)),
+  );
 
   List<LabResultDateGroup> get groups {
     final grouped = <String, List<LabResult>>{};
     final dates = <String, DateTime>{};
-    for (final result in _results) {
+    for (final result in results) {
       grouped.putIfAbsent(result.dateKey, () => []).add(result);
       dates[result.dateKey] = result.date;
     }
@@ -58,7 +64,7 @@ class LabResultService extends ChangeNotifier {
 
   List<LabResult> resultsForDate(DateTime date) {
     final dateKey = LabResult.formatDateKey(date);
-    return _results.where((result) => result.dateKey == dateKey).toList()
+    return results.where((result) => result.dateKey == dateKey).toList()
       ..sort(_compareResultOrder);
   }
 
@@ -72,6 +78,9 @@ class LabResultService extends ChangeNotifier {
   }
 
   Future<void> save(LabResult result) async {
+    if (_isFutureDate(result.date)) {
+      throw const FutureLabResultDateException();
+    }
     final testName = result.testName.trim();
     if (testName.isEmpty) {
       throw const EmptyLabTestNameException();
@@ -115,6 +124,13 @@ class LabResultService extends ChangeNotifier {
     await _storage.delete(id);
     _results.removeWhere((result) => result.id == id);
     notifyListeners();
+  }
+
+  bool _isFutureDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+    return target.isAfter(today);
   }
 
   void _sortResults() {

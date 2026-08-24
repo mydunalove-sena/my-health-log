@@ -12,6 +12,10 @@ class EmptyHealthRecordException implements Exception {
   const EmptyHealthRecordException();
 }
 
+class FutureHealthRecordDateException implements Exception {
+  const FutureHealthRecordDateException();
+}
+
 abstract class HealthRecordStorage {
   Future<List<HealthRecord>> fetchAll();
   Future<void> insert(HealthRecord record);
@@ -25,7 +29,9 @@ class HealthRecordService extends ChangeNotifier {
   final HealthRecordStorage _storage;
   final List<HealthRecord> _records = [];
 
-  List<HealthRecord> get records => List.unmodifiable(_records);
+  List<HealthRecord> get records => List.unmodifiable(
+    _records.where((record) => !_isFutureDate(record.date)),
+  );
 
   Future<void> load() async {
     _records
@@ -48,6 +54,9 @@ class HealthRecordService extends ChangeNotifier {
   HealthRecord? get todayRecord => recordForDate(DateTime.now());
 
   Future<void> save(HealthRecord record) async {
+    if (_isFutureDate(record.date)) {
+      throw const FutureHealthRecordDateException();
+    }
     if (!record.hasAnyHealthValue) {
       throw const EmptyHealthRecordException();
     }
@@ -75,6 +84,13 @@ class HealthRecordService extends ChangeNotifier {
     await _storage.delete(id);
     _records.removeWhere((record) => record.id == id);
     notifyListeners();
+  }
+
+  bool _isFutureDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+    return target.isAfter(today);
   }
 
   void _sortRecords() {

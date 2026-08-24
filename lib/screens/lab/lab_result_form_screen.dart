@@ -189,11 +189,14 @@ class _LabResultFormScreenState extends State<LabResultFormScreen> {
   }
 
   Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final initialDate = _selectedDate.isAfter(today) ? today : _selectedDate;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate,
+      initialDate: initialDate,
       firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+      lastDate: today,
     );
     if (picked != null) {
       setState(() {
@@ -251,6 +254,11 @@ class _LabResultFormScreenState extends State<LabResultFormScreen> {
 
     try {
       await widget.service.save(result);
+    } on FutureLabResultDateException {
+      setState(() {
+        _formError = '미래 날짜에는 검사 결과를 저장할 수 없습니다.';
+      });
+      return;
     } on DuplicateLabResultException {
       setState(() {
         _formError = '\uAC19\uC740 \uB0A0\uC9DC\uC758 \uAC19\uC740 \uAC80\uC0AC \uD56D\uBAA9\uC774 \uC774\uBBF8 \uC788\uC2B5\uB2C8\uB2E4.';
