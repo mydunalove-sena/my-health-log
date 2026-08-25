@@ -27,12 +27,14 @@ class BackupSnapshot {
     required this.medicationLogs,
     required this.labResults,
     this.prnMedicationLogs = const [],
+    this.medicationDoseHistory = const [],
   });
 
   final List<HealthRecord> healthRecords;
   final List<Medication> medications;
   final List<MedicationLog> medicationLogs;
   final List<PrnMedicationLog> prnMedicationLogs;
+  final List<MedicationDoseHistory> medicationDoseHistory;
   final List<LabResult> labResults;
 
   Map<String, Object?> toJson() {
@@ -43,6 +45,9 @@ class BackupSnapshot {
           .toList(),
       'medicationLogs': medicationLogs.map((log) => log.toMap()).toList(),
       'prnMedicationLogs': prnMedicationLogs.map((log) => log.toMap()).toList(),
+      'medicationDoseHistory': medicationDoseHistory
+          .map((item) => item.toMap())
+          .toList(),
       'labResults': labResults.map((result) => result.toMap()).toList(),
     };
   }
@@ -68,6 +73,11 @@ class BackupSnapshot {
       'prnMedicationLogs',
       PrnMedicationLog.fromMap,
     );
+    final medicationDoseHistory = _readOptionalCollection(
+      json,
+      'medicationDoseHistory',
+      MedicationDoseHistory.fromMap,
+    );
     final labResults = _readCollection(json, 'labResults', LabResult.fromMap);
 
     final medicationIds = medications.map((item) => item.id).toSet();
@@ -76,6 +86,9 @@ class BackupSnapshot {
         ) ||
         prnMedicationLogs.any(
           (log) => !medicationIds.contains(log.medicationId),
+        ) ||
+        medicationDoseHistory.any(
+          (item) => !medicationIds.contains(item.medicationId),
         )) {
       throw const BackupValidationException('백업 데이터가 손상되어 복원할 수 없습니다.');
     }
@@ -85,6 +98,7 @@ class BackupSnapshot {
       medications: medications,
       medicationLogs: medicationLogs,
       prnMedicationLogs: prnMedicationLogs,
+      medicationDoseHistory: medicationDoseHistory,
       labResults: labResults,
     );
   }
@@ -144,8 +158,8 @@ class BackupDocument {
   });
 
   static const appName = 'My Health Log';
-  static const backupVersion = 2;
-  static const supportedBackupVersions = {1, 2};
+  static const backupVersion = 3;
+  static const supportedBackupVersions = {1, 2, 3};
 
   final DateTime createdAt;
   final String appVersion;
@@ -156,6 +170,7 @@ class BackupDocument {
         snapshot.medications.length +
         snapshot.medicationLogs.length +
         snapshot.prnMedicationLogs.length +
+        snapshot.medicationDoseHistory.length +
         snapshot.labResults.length;
   }
 
@@ -223,6 +238,7 @@ class SqfliteBackupRepository implements BackupRepository {
   static const _medicationsTable = 'medications';
   static const _medicationLogsTable = 'medication_logs';
   static const _prnMedicationLogsTable = 'prn_medication_logs';
+  static const _doseHistoryTable = 'medication_dose_history';
   static const _labResultsTable = 'lab_results';
 
   @override
@@ -244,6 +260,10 @@ class SqfliteBackupRepository implements BackupRepository {
       _prnMedicationLogsTable,
       orderBy: 'takenAt ASC',
     );
+    final historyRows = await db.query(
+      _doseHistoryTable,
+      orderBy: 'changedAt ASC',
+    );
     final labRows = await db.query(_labResultsTable, orderBy: 'date DESC');
 
     return BackupSnapshot(
@@ -251,6 +271,9 @@ class SqfliteBackupRepository implements BackupRepository {
       medications: medicationRows.map(Medication.fromMap).toList(),
       medicationLogs: logRows.map(MedicationLog.fromMap).toList(),
       prnMedicationLogs: prnLogRows.map(PrnMedicationLog.fromMap).toList(),
+      medicationDoseHistory: historyRows
+          .map(MedicationDoseHistory.fromMap)
+          .toList(),
       labResults: labRows.map(LabResult.fromMap).toList(),
     );
   }
@@ -259,6 +282,7 @@ class SqfliteBackupRepository implements BackupRepository {
   Future<void> replaceWith(BackupSnapshot snapshot) async {
     final db = await AppDatabase.open();
     await db.transaction((txn) async {
+      await txn.delete(_doseHistoryTable);
       await txn.delete(_prnMedicationLogsTable);
       await txn.delete(_medicationLogsTable);
       await txn.delete(_medicationsTable);
@@ -276,6 +300,9 @@ class SqfliteBackupRepository implements BackupRepository {
       }
       for (final log in snapshot.prnMedicationLogs) {
         await txn.insert(_prnMedicationLogsTable, log.toMap());
+      }
+      for (final item in snapshot.medicationDoseHistory) {
+        await txn.insert(_doseHistoryTable, item.toMap());
       }
       for (final result in snapshot.labResults) {
         await txn.insert(_labResultsTable, result.toMap());

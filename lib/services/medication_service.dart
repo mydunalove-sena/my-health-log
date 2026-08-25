@@ -38,8 +38,14 @@ abstract class MedicationStorage {
   Future<List<MedicationLog>> fetchAllLogs();
   Future<List<PrnMedicationLog>> fetchPrnLogsForDate(DateTime date);
   Future<List<PrnMedicationLog>> fetchAllPrnLogs();
+  Future<List<MedicationDoseHistory>> fetchDoseHistory(String medicationId);
+  Future<List<MedicationDoseHistory>> fetchAllDoseHistory();
   Future<void> insertMedication(Medication medication);
   Future<void> updateMedication(Medication medication);
+  Future<void> updateMedicationWithDoseHistory(
+    Medication medication,
+    MedicationDoseHistory? history,
+  );
   Future<void> updateMedicationActive(
     String id,
     bool isActive,
@@ -111,6 +117,12 @@ class MedicationService extends ChangeNotifier {
     );
   }
 
+  Future<List<MedicationDoseHistory>> doseHistoryForMedication(
+    String medicationId,
+  ) {
+    return _storage.fetchDoseHistory(medicationId);
+  }
+
   MedicationLog? logFor(
     String medicationId,
     DateTime date,
@@ -165,7 +177,9 @@ class MedicationService extends ChangeNotifier {
         _activeMedications.add(normalized);
       }
     } else {
-      await _storage.updateMedication(normalized);
+      final previous = _activeMedications[index];
+      final history = _buildDoseHistory(previous, normalized);
+      await _storage.updateMedicationWithDoseHistory(normalized, history);
       if (normalized.isActive) {
         _activeMedications[index] = normalized;
       } else {
@@ -197,23 +211,44 @@ class MedicationService extends ChangeNotifier {
     final key =
         '${medication.id}|${MedicationLog.formatDateKey(currentDate)}|${timeSlot.value}';
     final existing = _logsByKey[key];
-    final next = existing == null
-        ? MedicationLog(
-            id: 'medlog-${currentNow.microsecondsSinceEpoch}',
-            medicationId: medication.id,
-            date: currentDate,
-            timeSlot: timeSlot,
-            isTaken: true,
-            takenAt: currentNow,
-            createdAt: currentNow,
-            updatedAt: currentNow,
-          )
-        : existing.copyWith(
-            isTaken: !existing.isTaken,
-            takenAt: existing.isTaken ? null : currentNow,
-            clearTakenAt: existing.isTaken,
-            updatedAt: currentNow,
-          );
+
+    late final MedicationLog next;
+    if (existing == null) {
+      next = MedicationLog(
+        id: 'medlog-${currentNow.microsecondsSinceEpoch}',
+        medicationId: medication.id,
+        date: currentDate,
+        timeSlot: timeSlot,
+        isTaken: true,
+        takenAt: currentNow,
+        doseSnapshot: medication.dose,
+        doseValueSnapshot: medication.doseValue,
+        doseUnitSnapshot: medication.doseUnit,
+        createdAt: currentNow,
+        updatedAt: currentNow,
+      );
+    } else if (existing.isTaken) {
+      next = existing.copyWith(
+        isTaken: false,
+        clearTakenAt: true,
+        clearDoseSnapshot: true,
+        clearDoseValueSnapshot: true,
+        clearDoseUnitSnapshot: true,
+        updatedAt: currentNow,
+      );
+    } else {
+      next = existing.copyWith(
+        isTaken: true,
+        takenAt: currentNow,
+        doseSnapshot: medication.dose,
+        clearDoseSnapshot: medication.dose == null,
+        doseValueSnapshot: medication.doseValue,
+        clearDoseValueSnapshot: medication.doseValue == null,
+        doseUnitSnapshot: medication.doseUnit,
+        clearDoseUnitSnapshot: medication.doseUnit == null,
+        updatedAt: currentNow,
+      );
+    }
 
     await _storage.upsertMedicationLog(next);
     _logsByKey[key] = next;
@@ -282,6 +317,49 @@ class MedicationService extends ChangeNotifier {
   Future<List<PrnMedicationLog>> allPrnLogsForTest() =>
       _storage.fetchAllPrnLogs();
 
+  Future<List<MedicationDoseHistory>> allDoseHistoryForTest() =>
+      _storage.fetchAllDoseHistory();
+
+  MedicationDoseHistory? _buildDoseHistory(
+    Medication previous,
+    Medication next,
+  ) {
+    if (!_hasDoseChanged(previous, next)) {
+      return null;
+    }
+    final changedAt = next.updatedAt;
+    return MedicationDoseHistory(
+      id: 'dosehist-${next.id}-${changedAt.microsecondsSinceEpoch}',
+      medicationId: next.id,
+      previousDose: previous.dose,
+      previousDoseValue: previous.doseValue,
+      previousDoseUnit: previous.doseUnit,
+      newDose: next.dose,
+      newDoseValue: next.doseValue,
+      newDoseUnit: next.doseUnit,
+      changedAt: changedAt,
+      createdAt: changedAt,
+    );
+  }
+
+  bool _hasDoseChanged(Medication previous, Medication next) {
+    final previousStructured =
+        previous.doseValue != null && previous.doseUnit != null;
+    final nextStructured = next.doseValue != null && next.doseUnit != null;
+
+    if (previousStructured || nextStructured) {
+      return previous.doseValue != next.doseValue ||
+          previous.doseUnit != next.doseUnit;
+    }
+
+    return _normalizedText(previous.dose) != _normalizedText(next.dose);
+  }
+
+  String? _normalizedText(String? value) {
+    final normalized = value?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
+  }
+
   void _sortPrnLogs() {
     _prnLogsForLoadedDate.sort((a, b) => b.takenAt.compareTo(a.takenAt));
   }
@@ -296,6 +374,7 @@ class SqfliteMedicationStorage implements MedicationStorage {
   static const _medicationsTable = 'medications';
   static const _logsTable = 'medication_logs';
   static const _prnLogsTable = 'prn_medication_logs';
+  static const _doseHistoryTable = 'medication_dose_history';
 
   Database? _database;
 
@@ -359,6 +438,27 @@ class SqfliteMedicationStorage implements MedicationStorage {
   }
 
   @override
+  Future<List<MedicationDoseHistory>> fetchDoseHistory(
+    String medicationId,
+  ) async {
+    final db = await _db;
+    final rows = await db.query(
+      _doseHistoryTable,
+      where: 'medicationId = ?',
+      whereArgs: [medicationId],
+      orderBy: 'changedAt DESC',
+    );
+    return rows.map(MedicationDoseHistory.fromMap).toList();
+  }
+
+  @override
+  Future<List<MedicationDoseHistory>> fetchAllDoseHistory() async {
+    final db = await _db;
+    final rows = await db.query(_doseHistoryTable, orderBy: 'changedAt ASC');
+    return rows.map(MedicationDoseHistory.fromMap).toList();
+  }
+
+  @override
   Future<void> insertMedication(Medication medication) async {
     final db = await _db;
     await db.insert(_medicationsTable, medication.toMap());
@@ -373,6 +473,25 @@ class SqfliteMedicationStorage implements MedicationStorage {
       where: 'id = ?',
       whereArgs: [medication.id],
     );
+  }
+
+  @override
+  Future<void> updateMedicationWithDoseHistory(
+    Medication medication,
+    MedicationDoseHistory? history,
+  ) async {
+    final db = await _db;
+    await db.transaction((txn) async {
+      await txn.update(
+        _medicationsTable,
+        medication.toMap(),
+        where: 'id = ?',
+        whereArgs: [medication.id],
+      );
+      if (history != null) {
+        await txn.insert(_doseHistoryTable, history.toMap());
+      }
+    });
   }
 
   @override
@@ -425,13 +544,16 @@ class InMemoryMedicationStorage implements MedicationStorage {
     List<Medication>? medications,
     List<MedicationLog>? logs,
     List<PrnMedicationLog>? prnLogs,
+    List<MedicationDoseHistory>? doseHistory,
   }) : _medications = List.of(medications ?? const []),
        _logs = List.of(logs ?? const []),
-       _prnLogs = List.of(prnLogs ?? const []);
+       _prnLogs = List.of(prnLogs ?? const []),
+       _doseHistory = List.of(doseHistory ?? const []);
 
   final List<Medication> _medications;
   final List<MedicationLog> _logs;
   final List<PrnMedicationLog> _prnLogs;
+  final List<MedicationDoseHistory> _doseHistory;
 
   @override
   Future<List<Medication>> fetchActiveMedications() async {
@@ -459,6 +581,20 @@ class InMemoryMedicationStorage implements MedicationStorage {
   Future<List<PrnMedicationLog>> fetchAllPrnLogs() async => List.of(_prnLogs);
 
   @override
+  Future<List<MedicationDoseHistory>> fetchDoseHistory(
+    String medicationId,
+  ) async {
+    final result =
+        _doseHistory.where((item) => item.medicationId == medicationId).toList()
+          ..sort((a, b) => b.changedAt.compareTo(a.changedAt));
+    return result;
+  }
+
+  @override
+  Future<List<MedicationDoseHistory>> fetchAllDoseHistory() async =>
+      List.of(_doseHistory);
+
+  @override
   Future<void> insertMedication(Medication medication) async {
     _medications.add(medication);
   }
@@ -470,6 +606,17 @@ class InMemoryMedicationStorage implements MedicationStorage {
       _medications.add(medication);
     } else {
       _medications[index] = medication;
+    }
+  }
+
+  @override
+  Future<void> updateMedicationWithDoseHistory(
+    Medication medication,
+    MedicationDoseHistory? history,
+  ) async {
+    await updateMedication(medication);
+    if (history != null) {
+      _doseHistory.add(history);
     }
   }
 

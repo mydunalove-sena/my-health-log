@@ -454,9 +454,10 @@ class _HomeMedicationItem {
     final state = item.isTaken
         ? '\uBCF5\uC6A9 \uC644\uB8CC'
         : '\uBBF8\uBCF5\uC6A9';
-    final dose = item.medication.dose == null
-        ? ''
-        : ' \u00B7 ${item.medication.dose}';
+    final displayedDose = item.isTaken
+        ? item.log?.displayDoseSnapshot
+        : item.medication.displayDose;
+    final dose = displayedDose == null ? '' : ' \u00B7 $displayedDose';
     return _HomeMedicationItem(
       name: item.medication.name,
       detail: '${item.timeSlot.label}$dose \u00B7 $state',

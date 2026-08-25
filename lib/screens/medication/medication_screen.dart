@@ -248,6 +248,9 @@ class _MedicationDoseRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final medication = item.medication;
+    final displayDose = item.isTaken
+        ? item.log?.displayDoseSnapshot
+        : medication.displayDose;
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Row(
@@ -260,10 +263,10 @@ class _MedicationDoseRow extends StatelessWidget {
                   medication.name,
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
-                if (medication.displayDose != null) ...[
+                if (displayDose != null) ...[
                   const SizedBox(height: AppSpacing.xxs),
                   Text(
-                    medication.displayDose!,
+                    displayDose,
                     style: Theme.of(context).textTheme.bodyMedium
                         ?.copyWith(color: AppColors.secondaryText),
                   ),

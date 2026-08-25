@@ -42,9 +42,27 @@
 | V3-MED-TC-15 | PRN | Record future date | Rejected |
 | V3-MED-TC-16 | PRN | Record future time today | Rejected |
 | V3-MED-TC-17 | PRN | Record dose/note | Actual value/unit/note preserved |
-| V3-MED-TC-18 | Backup | Create V3 backup | Uses backupVersion 2 and includes PRN logs |
+| V3-MED-TC-18 | Backup | Create P0-2 backup | Uses backupVersion 2 and includes PRN logs |
 | V3-MED-TC-19 | Backup | Restore V2 backupVersion 1 | Accepted; V3 defaults applied |
 | V3-MED-TC-20 | Regression | Existing Home scheduled medication | Remains displayed correctly |
+
+## Dose Change History / Scheduled Snapshot
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V3-HIST-TC-01 | History | Register a new medication | No fabricated initial change event |
+| V3-HIST-TC-02 | History | Change `0.5mg` to `1mg` | One event with previous/new dose and changed time |
+| V3-HIST-TC-03 | History | Change only name/schedule | No dose-change event |
+| V3-HIST-TC-04 | History | Existing `10 mg`, save `10mg` | No false history event |
+| V3-HIST-TC-05 | History | Remove current dose | Event preserves previous dose and empty new dose |
+| V3-HIST-TC-06 | History UI | Open edited medication with history | Previous -> new dose and changed time visible |
+| V3-SNAP-TC-01 | Scheduled log | Mark `0.5mg` medication taken | Log snapshot is `0.5mg` |
+| V3-SNAP-TC-02 | Scheduled log | Change medication to `1mg` after taken | Existing log remains `0.5mg` |
+| V3-SNAP-TC-03 | Scheduled log | Undo taken state | Snapshot cleared |
+| V3-SNAP-TC-04 | Scheduled log | Retake after dose changed to `1mg` | Snapshot becomes `1mg` |
+| V3-SNAP-TC-05 | Legacy log | Load pre-V5 taken log | Snapshot remains empty/unknown |
+| V3-HIST-TC-07 | Backup | Backup history + scheduled snapshot | backupVersion 3 round-trips both |
+| V3-HIST-TC-08 | Backup | Restore backupVersion 2 | Accepted with empty history/snapshot |
 
 ## Regression
 

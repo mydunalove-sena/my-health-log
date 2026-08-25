@@ -19,7 +19,7 @@ void main() {
 
       expect(decoded.appVersion, 'test-version');
       expect(decoded.totalCount, 0);
-      expect(decoded.toJson()['backupVersion'], 2);
+      expect(decoded.toJson()['backupVersion'], 3);
       expect(decoded.snapshot.healthRecords, isEmpty);
       expect(decoded.snapshot.medications, isEmpty);
       expect(decoded.snapshot.medicationLogs, isEmpty);

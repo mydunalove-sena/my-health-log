@@ -21,6 +21,7 @@ V3 improves medication management and symptom logging based on real usage while 
 - Add PRN medication support.
 - Support decimal medication doses and units (`정`, `mg`, `ml`).
 - Preserve medication dose-change history.
+- Preserve the dose meaning of historical scheduled medication logs.
 - Add symptom recording.
 - Add automated tests for V3 changes.
 - Run full V2 regression.
@@ -69,13 +70,32 @@ Applies to HealthRecord and LabResult.
 - DOSE-04: The legacy `dose` string remains available for V1/V2 data compatibility.
 - DOSE-05: Parseable legacy values such as `0.5정`, `10 mg`, and `2.5ml` are mapped to the structured V3 dose in memory.
 - DOSE-06: Unparseable legacy free-form dose text is preserved, not discarded.
-- BACKUP-01: V3 backup includes structured medication fields and PRN logs.
-- BACKUP-02: V3 uses backup version 2.
-- BACKUP-03: V3 can still validate and restore V2 backup version 1.
+- BACKUP-01: V3 P0-2 backup includes structured medication fields and PRN logs.
+- BACKUP-02: P0-2 uses backup version 2.
+- BACKUP-03: P0-2 can still validate and restore backup version 1.
 
-## Deferred After P0-2
+## V3-MED-P03: Dose Change History / Scheduled Dose Snapshot
 
-- Medication dose-change history.
+- HIST-01: A newly registered medication does not fabricate a dose-change event.
+- HIST-02: Editing a medication creates a dose-change event only when the dose meaning changes.
+- HIST-03: A dose-change event stores the previous dose, new dose, and changed time.
+- HIST-04: Non-dose edits such as name or schedule changes do not create a dose-change event.
+- HIST-05: Semantically equal structured doses do not create false history even if legacy spacing differs (`10 mg` vs `10mg`).
+- HIST-06: Removing a previously recorded dose creates a dose-change event.
+- HIST-07: Dose-change history is visible on the medication edit screen.
+- SNAP-01: When a scheduled medication is marked taken, the log snapshots the medication dose at that time.
+- SNAP-02: Later medication dose edits do not mutate an already-taken scheduled log snapshot.
+- SNAP-03: Marking a scheduled dose as not taken clears its dose snapshot.
+- SNAP-04: Re-taking after a dose change snapshots the current dose.
+- SNAP-05: Pre-V5 medication logs without a snapshot remain unknown; current dose is not copied backward into history.
+- PRN-SNAP-01: PRN dose handling remains unchanged because PRN logs already store actual dose value/unit per event.
+- DB-05: Database version increases from 4 to 5 for dose history and scheduled-log snapshots.
+- BACKUP-04: P0-3 backup version is 3 and includes medication dose history plus scheduled-log dose snapshots.
+- BACKUP-05: Backup versions 1 and 2 remain accepted.
+- BACKUP-06: An older backup without history/snapshot restores with those fields empty instead of fabricating values.
+
+## Deferred After P0-3
+
 - Symptom recording.
 - Symptom-to-PRN linkage.
 - Advanced PRN/symptom statistics.

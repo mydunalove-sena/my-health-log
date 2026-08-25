@@ -88,15 +88,7 @@ class Medication {
   bool get isPrn => type == MedicationType.prn;
   bool get hasAnyTimeSlot => morning || lunch || evening || bedtime;
 
-  String? get displayDose {
-    final value = doseValue;
-    final unit = doseUnit;
-    if (value != null && unit != null) {
-      return '${formatDoseValue(value)}${unit.label}';
-    }
-    final legacy = dose?.trim();
-    return legacy == null || legacy.isEmpty ? null : legacy;
-  }
+  String? get displayDose => _displayDose(dose, doseValue, doseUnit);
 
   List<MedicationTimeSlot> get timeSlots => [
     if (morning) MedicationTimeSlot.morning,
@@ -221,8 +213,73 @@ class Medication {
 
 class _ParsedDose {
   const _ParsedDose(this.value, this.unit);
+
   final double value;
   final MedicationDoseUnit unit;
+}
+
+class MedicationDoseHistory {
+  const MedicationDoseHistory({
+    required this.id,
+    required this.medicationId,
+    required this.changedAt,
+    required this.createdAt,
+    this.previousDose,
+    this.previousDoseValue,
+    this.previousDoseUnit,
+    this.newDose,
+    this.newDoseValue,
+    this.newDoseUnit,
+  });
+
+  final String id;
+  final String medicationId;
+  final String? previousDose;
+  final double? previousDoseValue;
+  final MedicationDoseUnit? previousDoseUnit;
+  final String? newDose;
+  final double? newDoseValue;
+  final MedicationDoseUnit? newDoseUnit;
+  final DateTime changedAt;
+  final DateTime createdAt;
+
+  String? get previousDisplayDose =>
+      _displayDose(previousDose, previousDoseValue, previousDoseUnit);
+
+  String? get newDisplayDose =>
+      _displayDose(newDose, newDoseValue, newDoseUnit);
+
+  Map<String, Object?> toMap() => {
+    'id': id,
+    'medicationId': medicationId,
+    'previousDose': previousDose,
+    'previousDoseValue': previousDoseValue,
+    'previousDoseUnit': previousDoseUnit?.value,
+    'newDose': newDose,
+    'newDoseValue': newDoseValue,
+    'newDoseUnit': newDoseUnit?.value,
+    'changedAt': changedAt.toIso8601String(),
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory MedicationDoseHistory.fromMap(Map<String, Object?> map) {
+    final previousValue = map['previousDoseValue'];
+    final newValue = map['newDoseValue'];
+    return MedicationDoseHistory(
+      id: map['id'] as String,
+      medicationId: map['medicationId'] as String,
+      previousDose: map['previousDose'] as String?,
+      previousDoseValue: previousValue is num ? previousValue.toDouble() : null,
+      previousDoseUnit: MedicationDoseUnit.fromValueOrNull(
+        map['previousDoseUnit'],
+      ),
+      newDose: map['newDose'] as String?,
+      newDoseValue: newValue is num ? newValue.toDouble() : null,
+      newDoseUnit: MedicationDoseUnit.fromValueOrNull(map['newDoseUnit']),
+      changedAt: DateTime.parse(map['changedAt'] as String),
+      createdAt: DateTime.parse(map['createdAt'] as String),
+    );
+  }
 }
 
 class MedicationLog {
@@ -235,6 +292,9 @@ class MedicationLog {
     required this.createdAt,
     required this.updatedAt,
     this.takenAt,
+    this.doseSnapshot,
+    this.doseValueSnapshot,
+    this.doseUnitSnapshot,
   });
 
   final String id;
@@ -243,11 +303,17 @@ class MedicationLog {
   final MedicationTimeSlot timeSlot;
   final bool isTaken;
   final DateTime? takenAt;
+  final String? doseSnapshot;
+  final double? doseValueSnapshot;
+  final MedicationDoseUnit? doseUnitSnapshot;
   final DateTime createdAt;
   final DateTime updatedAt;
 
   String get dateKey => formatDateKey(date);
   String get uniqueKey => '$medicationId|$dateKey|${timeSlot.value}';
+
+  String? get displayDoseSnapshot =>
+      _displayDose(doseSnapshot, doseValueSnapshot, doseUnitSnapshot);
 
   MedicationLog copyWith({
     String? id,
@@ -257,6 +323,12 @@ class MedicationLog {
     bool? isTaken,
     DateTime? takenAt,
     bool clearTakenAt = false,
+    String? doseSnapshot,
+    bool clearDoseSnapshot = false,
+    double? doseValueSnapshot,
+    bool clearDoseValueSnapshot = false,
+    MedicationDoseUnit? doseUnitSnapshot,
+    bool clearDoseUnitSnapshot = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -267,6 +339,15 @@ class MedicationLog {
       timeSlot: timeSlot ?? this.timeSlot,
       isTaken: isTaken ?? this.isTaken,
       takenAt: clearTakenAt ? null : takenAt ?? this.takenAt,
+      doseSnapshot: clearDoseSnapshot
+          ? null
+          : doseSnapshot ?? this.doseSnapshot,
+      doseValueSnapshot: clearDoseValueSnapshot
+          ? null
+          : doseValueSnapshot ?? this.doseValueSnapshot,
+      doseUnitSnapshot: clearDoseUnitSnapshot
+          ? null
+          : doseUnitSnapshot ?? this.doseUnitSnapshot,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -279,22 +360,35 @@ class MedicationLog {
     'timeSlot': timeSlot.value,
     'isTaken': isTaken ? 1 : 0,
     'takenAt': takenAt?.toIso8601String(),
+    'doseSnapshot': doseSnapshot,
+    'doseValueSnapshot': doseValueSnapshot,
+    'doseUnitSnapshot': doseUnitSnapshot?.value,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
   };
 
-  factory MedicationLog.fromMap(Map<String, Object?> map) => MedicationLog(
-    id: map['id'] as String,
-    medicationId: map['medicationId'] as String,
-    date: DateTime.parse(map['date'] as String),
-    timeSlot: MedicationTimeSlot.fromValue(map['timeSlot'] as String),
-    isTaken: (map['isTaken'] as num).toInt() == 1,
-    takenAt: map['takenAt'] == null
-        ? null
-        : DateTime.parse(map['takenAt'] as String),
-    createdAt: DateTime.parse(map['createdAt'] as String),
-    updatedAt: DateTime.parse(map['updatedAt'] as String),
-  );
+  factory MedicationLog.fromMap(Map<String, Object?> map) {
+    final rawDoseValueSnapshot = map['doseValueSnapshot'];
+    return MedicationLog(
+      id: map['id'] as String,
+      medicationId: map['medicationId'] as String,
+      date: DateTime.parse(map['date'] as String),
+      timeSlot: MedicationTimeSlot.fromValue(map['timeSlot'] as String),
+      isTaken: (map['isTaken'] as num).toInt() == 1,
+      takenAt: map['takenAt'] == null
+          ? null
+          : DateTime.parse(map['takenAt'] as String),
+      doseSnapshot: map['doseSnapshot'] as String?,
+      doseValueSnapshot: rawDoseValueSnapshot is num
+          ? rawDoseValueSnapshot.toDouble()
+          : null,
+      doseUnitSnapshot: MedicationDoseUnit.fromValueOrNull(
+        map['doseUnitSnapshot'],
+      ),
+      createdAt: DateTime.parse(map['createdAt'] as String),
+      updatedAt: DateTime.parse(map['updatedAt'] as String),
+    );
+  }
 
   static String formatDateKey(DateTime date) {
     final normalized = DateTime(date.year, date.month, date.day);
@@ -367,8 +461,18 @@ class MedicationDoseItem {
     required this.timeSlot,
     this.log,
   });
+
   final Medication medication;
   final MedicationTimeSlot timeSlot;
   final MedicationLog? log;
+
   bool get isTaken => log?.isTaken ?? false;
+}
+
+String? _displayDose(String? text, double? value, MedicationDoseUnit? unit) {
+  if (value != null && unit != null) {
+    return '${Medication.formatDoseValue(value)}${unit.label}';
+  }
+  final legacy = text?.trim();
+  return legacy == null || legacy.isEmpty ? null : legacy;
 }

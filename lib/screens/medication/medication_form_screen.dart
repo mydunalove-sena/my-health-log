@@ -32,6 +32,7 @@ class _MedicationFormScreenState extends State<MedicationFormScreen> {
   late bool _bedtime;
   String? _legacyDose;
   late final String _initialSnapshot;
+  Future<List<MedicationDoseHistory>>? _doseHistoryFuture;
   String? _timeSlotError;
 
   bool get _isEdit => widget.medication != null;
@@ -54,6 +55,11 @@ class _MedicationFormScreenState extends State<MedicationFormScreen> {
     _evening = medication?.evening ?? false;
     _bedtime = medication?.bedtime ?? false;
     _initialSnapshot = _snapshot();
+    if (medication != null) {
+      _doseHistoryFuture = widget.service.doseHistoryForMedication(
+        medication.id,
+      );
+    }
   }
 
   @override
@@ -242,6 +248,16 @@ class _MedicationFormScreenState extends State<MedicationFormScreen> {
                     label: _isEdit ? '변경사항 저장' : '저장',
                     onPressed: _save,
                   ),
+                  if (_isEdit) ...[
+                    const SizedBox(height: AppSpacing.xl),
+                    Text(
+                      '복용량 변경 이력',
+                      key: const Key('medication-dose-history-title'),
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _DoseHistorySection(future: _doseHistoryFuture!),
+                  ],
                 ],
               ),
             ),
@@ -381,6 +397,80 @@ class _MedicationFormScreenState extends State<MedicationFormScreen> {
         Navigator.of(context).pop();
       }
     }
+  }
+}
+
+class _DoseHistorySection extends StatelessWidget {
+  const _DoseHistorySection({required this.future});
+
+  final Future<List<MedicationDoseHistory>> future;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<MedicationDoseHistory>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Text(
+            '변경 이력을 불러오지 못했습니다.',
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: AppColors.secondaryText),
+          );
+        }
+        final history = snapshot.data ?? const [];
+        if (history.isEmpty) {
+          return Text(
+            '변경 이력이 없습니다.',
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: AppColors.secondaryText),
+          );
+        }
+        return Column(
+          key: const Key('medication-dose-history-list'),
+          children: [
+            for (final item in history)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${item.previousDisplayDose ?? '기록 없음'} → '
+                      '${item.newDisplayDose ?? '기록 없음'}',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      _formatChangedAt(item.changedAt),
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: AppColors.secondaryText),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _formatChangedAt(DateTime date) {
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '$year.$month.$day $hour:$minute';
   }
 }
 
