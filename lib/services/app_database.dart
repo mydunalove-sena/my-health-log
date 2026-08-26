@@ -5,7 +5,7 @@ class AppDatabase {
   AppDatabase._();
 
   static const databaseName = 'my_health_log.db';
-  static const databaseVersion = 5;
+  static const databaseVersion = 6;
   static Database? _database;
 
   static Future<Database> open() async {
@@ -21,6 +21,7 @@ class AppDatabase {
         await _createHealthRecords(db);
         await _createMedicationTables(db);
         await _createLabResultTables(db);
+        await _createSymptomTables(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -34,6 +35,9 @@ class AppDatabase {
         }
         if (oldVersion >= 2 && oldVersion < 5) {
           await _upgradeMedicationV5(db);
+        }
+        if (oldVersion < 6) {
+          await _createSymptomTables(db);
         }
       },
     );
@@ -193,5 +197,89 @@ CREATE TABLE IF NOT EXISTS lab_results (
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_lab_results_date ON lab_results(date)',
     );
+  }
+
+  static Future<void> _createSymptomTables(Database db) async {
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS symptom_definitions (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  isDefault INTEGER NOT NULL DEFAULT 0,
+  isActive INTEGER NOT NULL DEFAULT 1,
+  sortOrder INTEGER NOT NULL DEFAULT 0,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL
+)
+''');
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS symptom_records (
+  id TEXT PRIMARY KEY,
+  symptomDefinitionId TEXT NOT NULL,
+  date TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL,
+  FOREIGN KEY (symptomDefinitionId) REFERENCES symptom_definitions(id),
+  UNIQUE (date, symptomDefinitionId)
+)
+''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_symptom_records_date '
+      'ON symptom_records(date)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_symptom_records_symptom '
+      'ON symptom_records(symptomDefinitionId)',
+    );
+    await _seedDefaultSymptoms(db);
+  }
+
+  static Future<void> _seedDefaultSymptoms(Database db) async {
+    const createdAt = '2026-08-26T00:00:00.000';
+    final rows = [
+      {
+        'id': 'symptom-headache',
+        'name': '두통',
+        'isDefault': 1,
+        'isActive': 1,
+        'sortOrder': 10,
+        'createdAt': createdAt,
+        'updatedAt': createdAt,
+      },
+      {
+        'id': 'symptom-fatigue',
+        'name': '피로',
+        'isDefault': 1,
+        'isActive': 1,
+        'sortOrder': 20,
+        'createdAt': createdAt,
+        'updatedAt': createdAt,
+      },
+      {
+        'id': 'symptom-nausea',
+        'name': '메스꺼움',
+        'isDefault': 1,
+        'isActive': 1,
+        'sortOrder': 30,
+        'createdAt': createdAt,
+        'updatedAt': createdAt,
+      },
+      {
+        'id': 'symptom-dizziness',
+        'name': '어지러움',
+        'isDefault': 1,
+        'isActive': 1,
+        'sortOrder': 40,
+        'createdAt': createdAt,
+        'updatedAt': createdAt,
+      },
+    ];
+    for (final row in rows) {
+      await db.insert(
+        'symptom_definitions',
+        row,
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
   }
 }

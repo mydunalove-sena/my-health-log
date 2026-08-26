@@ -12,6 +12,7 @@ import 'package:my_health_log/screens/health/health_screen.dart';
 import 'package:my_health_log/screens/home/home_screen.dart';
 import 'package:my_health_log/services/health_record_service.dart';
 import 'package:my_health_log/services/medication_service.dart';
+import 'package:my_health_log/services/symptom_service.dart';
 
 void main() {
   testWidgets('shows root navigation destinations', (tester) async {
@@ -152,7 +153,11 @@ void main() {
 
   testWidgets('health empty state is shown', (tester) async {
     final service = await _service();
-    await tester.pumpWidget(MaterialApp(home: HealthScreen(service: service)));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HealthScreen(service: service, symptomService: await _symptoms()),
+      ),
+    );
 
     expect(find.byIcon(Icons.monitor_heart_outlined), findsWidgets);
     expect(find.byIcon(Icons.add), findsOneWidget);
@@ -160,7 +165,11 @@ void main() {
 
   testWidgets('health add screen opens from list', (tester) async {
     final service = await _service();
-    await tester.pumpWidget(MaterialApp(home: HealthScreen(service: service)));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HealthScreen(service: service, symptomService: await _symptoms()),
+      ),
+    );
 
     await tester.tap(find.byIcon(Icons.add));
     await tester.pumpAndSettle();
@@ -200,7 +209,11 @@ void main() {
 
   testWidgets('health record is saved and displayed in list', (tester) async {
     final service = await _service();
-    await tester.pumpWidget(MaterialApp(home: HealthScreen(service: service)));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HealthScreen(service: service, symptomService: await _symptoms()),
+      ),
+    );
 
     await tester.tap(find.byIcon(Icons.add));
     await tester.pumpAndSettle();
@@ -219,7 +232,11 @@ void main() {
 
   testWidgets('existing health record can be edited', (tester) async {
     final service = await _service(records: [_record(weight: 54.2)]);
-    await tester.pumpWidget(MaterialApp(home: HealthScreen(service: service)));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HealthScreen(service: service, symptomService: await _symptoms()),
+      ),
+    );
 
     await tester.tap(find.text(_todayListDate()));
     await tester.pumpAndSettle();
@@ -234,7 +251,11 @@ void main() {
 
   testWidgets('health record can be deleted after confirm', (tester) async {
     final service = await _service(records: [_record()]);
-    await tester.pumpWidget(MaterialApp(home: HealthScreen(service: service)));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HealthScreen(service: service, symptomService: await _symptoms()),
+      ),
+    );
 
     await tester.tap(find.text(_todayListDate()));
     await tester.pumpAndSettle();
@@ -262,7 +283,11 @@ void main() {
     final service = await _service(
       records: [_record(weight: null, systolic: null, diastolic: null)],
     );
-    await tester.pumpWidget(MaterialApp(home: HealthScreen(service: service)));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HealthScreen(service: service, symptomService: await _symptoms()),
+      ),
+    );
 
     expect(find.textContaining('0 kg'), findsNothing);
     expect(find.textContaining('0 mmHg'), findsNothing);
@@ -295,6 +320,12 @@ Future<MedicationService> _medService({List<Medication>? medications}) async {
   final service = MedicationService(
     InMemoryMedicationStorage(medications: medications),
   );
+  await service.load();
+  return service;
+}
+
+Future<SymptomService> _symptoms() async {
+  final service = SymptomService(InMemorySymptomStorage());
   await service.load();
   return service;
 }

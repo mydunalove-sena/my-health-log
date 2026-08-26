@@ -6,12 +6,19 @@ import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/health_record.dart';
 import '../../services/health_record_service.dart';
+import '../../services/symptom_service.dart';
 import 'health_form_screen.dart';
+import 'symptom_record_screen.dart';
 
 class HealthScreen extends StatelessWidget {
-  const HealthScreen({super.key, required this.service});
+  const HealthScreen({
+    super.key,
+    required this.service,
+    required this.symptomService,
+  });
 
   final HealthRecordService service;
+  final SymptomService symptomService;
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +30,14 @@ class HealthScreen extends StatelessWidget {
           appBar: AppBar(
             title: const Text('건강 기록'),
             actions: [
+              IconButton(
+                tooltip: '증상 기록',
+                icon: const Icon(
+                  Icons.sick_outlined,
+                  key: Key('symptom-record-button'),
+                ),
+                onPressed: () => _openSymptomRecord(context),
+              ),
               IconButton(
                 tooltip: '건강 기록 추가',
                 icon: const Icon(Icons.add, key: Key('health-add-button')),
@@ -73,6 +88,14 @@ class HealthScreen extends StatelessWidget {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => HealthFormScreen(service: service, record: record),
+      ),
+    );
+  }
+
+  Future<void> _openSymptomRecord(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SymptomRecordScreen(service: symptomService),
       ),
     );
   }

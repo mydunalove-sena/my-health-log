@@ -94,9 +94,24 @@ Applies to HealthRecord and LabResult.
 - BACKUP-05: Backup versions 1 and 2 remain accepted.
 - BACKUP-06: An older backup without history/snapshot restores with those fields empty instead of fabricating values.
 
-## Deferred After P0-3
+## V3-SYM-P04: Symptom Recording
 
-- Symptom recording.
+- SYM-01: A user can record symptoms by date.
+- SYM-02: Symptom severity has exactly four levels: `없음`, `약함`, `보통`, and `심함`.
+- SYM-03: The app stores symptom definitions separately from date-specific symptom records.
+- SYM-04: The same symptom on the same date must not create duplicate records; saving again updates the existing record.
+- SYM-05: A saved symptom record can be looked up again by date.
+- SYM-06: Existing health, medication, lab, and statistics behavior must not be changed by symptom recording.
+- SYM-07: The app records symptoms only. It must not diagnose, classify risk, infer causality, or recommend medication changes.
+- SYM-08: Symptom and PRN medication relationships are not stored or interpreted in P0-4.
+- SYM-09: The symptom record table remains independent so P0-5 can add a separate linkage structure later.
+- SYM-10: P0-4 uses only built-in default symptoms. User symptom add/edit remains P1.
+- DB-06: Database version increases from 5 to 6 for symptom definitions and symptom records.
+- BACKUP-07: Symptom backup/restore is not implemented in P0-4 and remains deferred to P0-6.
+
+## Deferred After P0-4
+
 - Symptom-to-PRN linkage.
+- Symptom backup/restore.
 - Advanced PRN/symptom statistics.
 - Health-field visibility settings.

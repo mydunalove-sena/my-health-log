@@ -117,3 +117,33 @@ Pending local application and validation.
 ### Result
 
 P0-3 medication dose history and scheduled-dose snapshot preservation passed automated and Android manual QA.
+
+## 2026-08-26 - P0-4 Symptom Recording
+
+### Requirement
+
+Record date-specific symptoms with a fixed four-level severity scale while keeping symptoms independent from PRN medication and preserving existing health, medication, lab, and statistics behavior.
+
+### Implementation
+
+- DB version 5 -> 6 migration.
+- Added `symptom_definitions` and `symptom_records`.
+- Seeded a small default symptom list: `두통`, `피로`, `메스꺼움`, `어지러움`.
+- Added fixed severity values: `없음`, `약함`, `보통`, `심함`.
+- Added date+symptom uniqueness so saving the same symptom on the same date updates the existing record.
+- Added symptom model and service/storage following the existing in-memory and sqflite service pattern.
+- Added a simple Health-tab entry point and symptom record screen.
+- Kept symptom records independent from PRN logs; P0-5 linkage is not implemented.
+- Did not add symptom backup/restore; P0-6 remains deferred.
+- Did not add user symptom add/edit; P1 remains deferred.
+
+### Automated QA
+
+- `dart format`: PASS
+- `flutter analyze`: PASS
+- Symptom focused tests: 6 PASS
+- Full regression: 120 PASS
+
+### Result
+
+P0-4 symptom recording passed local automated QA. P0-5 symptom-to-PRN linkage, P0-6 symptom backup/restore, and P1 user symptom add/edit remain unimplemented.

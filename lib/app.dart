@@ -11,6 +11,7 @@ import 'services/backup_service.dart';
 import 'services/health_record_service.dart';
 import 'services/lab_result_service.dart';
 import 'services/medication_service.dart';
+import 'services/symptom_service.dart';
 
 class MyHealthLogApp extends StatelessWidget {
   const MyHealthLogApp({
@@ -18,11 +19,13 @@ class MyHealthLogApp extends StatelessWidget {
     this.healthRecordService,
     this.medicationService,
     this.labResultService,
+    this.symptomService,
   });
 
   final HealthRecordService? healthRecordService;
   final MedicationService? medicationService;
   final LabResultService? labResultService;
+  final SymptomService? symptomService;
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +37,7 @@ class MyHealthLogApp extends StatelessWidget {
         healthRecordService: healthRecordService,
         medicationService: medicationService,
         labResultService: labResultService,
+        symptomService: symptomService,
       ),
     );
   }
@@ -44,11 +48,13 @@ class _AppBootstrap extends StatefulWidget {
     this.healthRecordService,
     this.medicationService,
     this.labResultService,
+    this.symptomService,
   });
 
   final HealthRecordService? healthRecordService;
   final MedicationService? medicationService;
   final LabResultService? labResultService;
+  final SymptomService? symptomService;
 
   @override
   State<_AppBootstrap> createState() => _AppBootstrapState();
@@ -58,6 +64,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
   late final HealthRecordService _healthService;
   late final MedicationService _medicationService;
   late final LabResultService _labResultService;
+  late final SymptomService _symptomService;
   late final Future<void> _loadFuture;
 
   @override
@@ -71,11 +78,25 @@ class _AppBootstrapState extends State<_AppBootstrap> {
         MedicationService(SqfliteMedicationStorage());
     _labResultService =
         widget.labResultService ?? LabResultService(SqfliteLabResultStorage());
+    _symptomService =
+        widget.symptomService ??
+        SymptomService(
+          _hasInjectedServices
+              ? InMemorySymptomStorage()
+              : SqfliteSymptomStorage(),
+        );
     _loadFuture = Future.wait<void>([
       _healthService.load(),
       _medicationService.load(),
       _labResultService.load(),
+      _symptomService.load(),
     ]);
+  }
+
+  bool get _hasInjectedServices {
+    return widget.healthRecordService != null ||
+        widget.medicationService != null ||
+        widget.labResultService != null;
   }
 
   @override
@@ -101,6 +122,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
           healthRecordService: _healthService,
           medicationService: _medicationService,
           labResultService: _labResultService,
+          symptomService: _symptomService,
         );
       },
     );
@@ -113,11 +135,13 @@ class AppShell extends StatefulWidget {
     required this.healthRecordService,
     required this.medicationService,
     required this.labResultService,
+    required this.symptomService,
   });
 
   final HealthRecordService healthRecordService;
   final MedicationService medicationService;
   final LabResultService labResultService;
+  final SymptomService symptomService;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -142,7 +166,10 @@ class _AppShellState extends State<AppShell> {
         onOpenMedication: () => _selectTab(2),
         onOpenDataManagement: _openDataManagement,
       ),
-      HealthScreen(service: widget.healthRecordService),
+      HealthScreen(
+        service: widget.healthRecordService,
+        symptomService: widget.symptomService,
+      ),
       MedicationScreen(service: widget.medicationService),
       LabScreen(service: widget.labResultService),
       StatisticsScreen(

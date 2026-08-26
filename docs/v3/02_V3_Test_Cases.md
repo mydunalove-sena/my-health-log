@@ -64,6 +64,21 @@
 | V3-HIST-TC-07 | Backup | Backup history + scheduled snapshot | backupVersion 3 round-trips both |
 | V3-HIST-TC-08 | Backup | Restore backupVersion 2 | Accepted with empty history/snapshot |
 
+## Symptom Recording
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V3-SYM-TC-01 | Severity | Inspect severity values | Exactly `없음`, `약함`, `보통`, `심함` |
+| V3-SYM-TC-02 | Service | Save one symptom for a date | Record is stored |
+| V3-SYM-TC-03 | Service | Query records for that date | Saved symptom is returned |
+| V3-SYM-TC-04 | Service | Save same date and same symptom again | Existing record is updated; no duplicate |
+| V3-SYM-TC-05 | Service | Save same symptom on another date | Dates remain separate |
+| V3-SYM-TC-06 | Regression | Save health, medication, lab, and symptom data | Existing services keep their own records |
+| V3-SYM-TC-07 | UI | Open symptom record from Health tab | Symptom record screen opens without changing bottom navigation |
+| V3-SYM-TC-08 | UI | Select severity and save | Severity is persisted |
+| V3-SYM-TC-09 | UI | Reopen saved date | Existing severity selection is shown |
+| V3-SYM-TC-10 | Scope | Record symptom while PRN exists | No symptom-to-PRN link or interpretation is created |
+
 ## Regression
 
 For each feature commit:

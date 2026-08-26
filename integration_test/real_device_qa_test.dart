@@ -13,6 +13,7 @@ import 'package:my_health_log/screens/statistics/statistics_screen.dart';
 import 'package:my_health_log/services/health_record_service.dart';
 import 'package:my_health_log/services/lab_result_service.dart';
 import 'package:my_health_log/services/medication_service.dart';
+import 'package:my_health_log/services/symptom_service.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -26,10 +27,12 @@ void main() {
     final healthService = HealthRecordService(SqfliteHealthRecordStorage());
     final medicationService = MedicationService(SqfliteMedicationStorage());
     final labResultService = LabResultService(SqfliteLabResultStorage());
+    final symptomService = SymptomService(SqfliteSymptomStorage());
     await Future.wait([
       healthService.load(),
       medicationService.load(),
       labResultService.load(),
+      symptomService.load(),
     ]);
 
     final firstHealthDate = _firstUnusedHealthDate(healthService);
@@ -104,6 +107,7 @@ void main() {
     await _smokeHealth(
       tester,
       healthService,
+      symptomService,
       firstHealthDate,
       secondHealthDate,
     );
@@ -136,10 +140,12 @@ void main() {
     final reloadedLabResultService = LabResultService(
       SqfliteLabResultStorage(),
     );
+    final reloadedSymptomService = SymptomService(SqfliteSymptomStorage());
     await Future.wait([
       reloadedHealthService.load(),
       reloadedMedicationService.load(),
       reloadedLabResultService.load(),
+      reloadedSymptomService.load(),
     ]);
 
     expect(reloadedHealthService.recordForDate(firstHealthDate)?.weight, 72.4);
@@ -165,6 +171,7 @@ void main() {
     await _smokeHealth(
       tester,
       reloadedHealthService,
+      reloadedSymptomService,
       firstHealthDate,
       secondHealthDate,
     );
@@ -220,10 +227,15 @@ Future<void> _smokeHome(
 Future<void> _smokeHealth(
   WidgetTester tester,
   HealthRecordService service,
+  SymptomService symptomService,
   DateTime firstDate,
   DateTime secondDate,
 ) async {
-  await tester.pumpWidget(MaterialApp(home: HealthScreen(service: service)));
+  await tester.pumpWidget(
+    MaterialApp(
+      home: HealthScreen(service: service, symptomService: symptomService),
+    ),
+  );
   await tester.pumpAndSettle();
   expect(
     find.byKey(ValueKey('health-record-${_dateKey(firstDate)}')),
