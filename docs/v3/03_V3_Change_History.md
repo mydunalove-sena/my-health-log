@@ -491,3 +491,9 @@ V3 final automated regression passed. Android V3 full regression was already com
 ### Result
 
 Release APK generation passed for the verified V3 code state.
+
+## 2026-08-27 - V3 Release Version Alignment
+
+- Prepared official release version `3.0.0+4` for GitHub Release `v3.0.0`.
+- Kept databaseVersion 7 and backupVersion 4 unchanged.
+- No feature, dependency, DB schema, or backup format change was included.

@@ -332,7 +332,7 @@ V3 상세 요구사항, 테스트 케이스, 변경 이력은 `docs/v3/`에서 �
 
 ## Release
 
-- Current App Version: `2.0.0+3`
+- Current App Version: `3.0.0+4`
 - Current Code State: V3 local release candidate from branch `v3`
 - Current Release Type: Local V3 Release APK
 - Current Release APK: Local release artifact outside repository, `MyHealthLog_V3_Release_20260827.apk`
