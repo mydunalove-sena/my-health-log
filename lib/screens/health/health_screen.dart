@@ -5,8 +5,10 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/health_record.dart';
+import '../../services/health_field_visibility_service.dart';
 import '../../services/health_record_service.dart';
 import '../../services/symptom_service.dart';
+import 'health_field_visibility_screen.dart';
 import 'health_form_screen.dart';
 import 'symptom_record_screen.dart';
 
@@ -15,21 +17,33 @@ class HealthScreen extends StatelessWidget {
     super.key,
     required this.service,
     required this.symptomService,
+    this.healthFieldVisibilityService,
   });
 
   final HealthRecordService service;
   final SymptomService symptomService;
+  final HealthFieldVisibilityService? healthFieldVisibilityService;
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: service,
+      animation: Listenable.merge([service, ?healthFieldVisibilityService]),
       builder: (context, _) {
         final records = service.records;
         return Scaffold(
           appBar: AppBar(
             title: const Text('건강 기록'),
             actions: [
+              IconButton(
+                tooltip: '\uD56D\uBAA9 \uD45C\uC2DC \uC124\uC815',
+                icon: const Icon(
+                  Icons.tune_outlined,
+                  key: Key('health-field-visibility-button'),
+                ),
+                onPressed: healthFieldVisibilityService == null
+                    ? null
+                    : () => _openFieldVisibilitySettings(context),
+              ),
               IconButton(
                 tooltip: '증상 기록',
                 icon: const Icon(
@@ -74,6 +88,7 @@ class HealthScreen extends StatelessWidget {
                       final record = records[index];
                       return _HealthRecordListItem(
                         record: record,
+                        visibilityService: healthFieldVisibilityService,
                         onTap: () => _openForm(context, record: record),
                       );
                     },
@@ -87,7 +102,23 @@ class HealthScreen extends StatelessWidget {
   Future<void> _openForm(BuildContext context, {HealthRecord? record}) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => HealthFormScreen(service: service, record: record),
+        builder: (_) => HealthFormScreen(
+          service: service,
+          record: record,
+          healthFieldVisibilityService: healthFieldVisibilityService,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFieldVisibilitySettings(BuildContext context) async {
+    final visibilityService = healthFieldVisibilityService;
+    if (visibilityService == null) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => HealthFieldVisibilityScreen(service: visibilityService),
       ),
     );
   }
@@ -102,10 +133,15 @@ class HealthScreen extends StatelessWidget {
 }
 
 class _HealthRecordListItem extends StatelessWidget {
-  const _HealthRecordListItem({required this.record, required this.onTap});
+  const _HealthRecordListItem({
+    required this.record,
+    required this.onTap,
+    this.visibilityService,
+  });
 
   final HealthRecord record;
   final VoidCallback onTap;
+  final HealthFieldVisibilityService? visibilityService;
 
   @override
   Widget build(BuildContext context) {
@@ -134,15 +170,18 @@ class _HealthRecordListItem extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: AppSpacing.xs),
-                    _SummaryLine(label: '체중', value: _weightText(record)),
-                    _SummaryLine(
-                      label: '혈압',
-                      value: _bloodPressureText(record),
-                    ),
-                    _SummaryLine(
-                      label: '컨디션',
-                      value: record.condition?.label ?? '기록 없음',
-                    ),
+                    if (visibilityService?.weightVisible ?? true)
+                      _SummaryLine(label: '체중', value: _weightText(record)),
+                    if (visibilityService?.bloodPressureVisible ?? true)
+                      _SummaryLine(
+                        label: '혈압',
+                        value: _bloodPressureText(record),
+                      ),
+                    if (visibilityService?.conditionVisible ?? true)
+                      _SummaryLine(
+                        label: '컨디션',
+                        value: record.condition?.label ?? '기록 없음',
+                      ),
                   ],
                 ),
               ),

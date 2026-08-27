@@ -4,6 +4,7 @@ import '../../services/backup_service.dart';
 import '../../services/health_record_service.dart';
 import '../../services/lab_result_service.dart';
 import '../../services/medication_service.dart';
+import '../../services/symptom_service.dart';
 
 class DataManagementScreen extends StatefulWidget {
   const DataManagementScreen({
@@ -12,12 +13,14 @@ class DataManagementScreen extends StatefulWidget {
     required this.healthRecordService,
     required this.medicationService,
     required this.labResultService,
+    required this.symptomService,
   });
 
   final BackupService backupService;
   final HealthRecordService healthRecordService;
   final MedicationService medicationService;
   final LabResultService labResultService;
+  final SymptomService symptomService;
 
   @override
   State<DataManagementScreen> createState() => _DataManagementScreenState();
@@ -136,6 +139,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
         widget.healthRecordService.load(),
         widget.medicationService.load(),
         widget.labResultService.load(),
+        widget.symptomService.load(),
       ]);
       if (mounted) {
         _showMessage('데이터 복원이 완료되었습니다.');

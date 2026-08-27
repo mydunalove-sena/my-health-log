@@ -4,13 +4,20 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/health_record.dart';
+import '../../services/health_field_visibility_service.dart';
 import '../../services/health_record_service.dart';
 
 class HealthFormScreen extends StatefulWidget {
-  const HealthFormScreen({super.key, required this.service, this.record});
+  const HealthFormScreen({
+    super.key,
+    required this.service,
+    this.record,
+    this.healthFieldVisibilityService,
+  });
 
   final HealthRecordService service;
   final HealthRecord? record;
+  final HealthFieldVisibilityService? healthFieldVisibilityService;
 
   @override
   State<HealthFormScreen> createState() => _HealthFormScreenState();
@@ -72,6 +79,7 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final visibility = widget.healthFieldVisibilityService;
     return PopScope(
       canPop: !_hasUnsavedChanges,
       onPopInvokedWithResult: (didPop, result) async {
@@ -122,94 +130,108 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
                 children: [
                   _DateField(date: _selectedDate, onTap: _pickDate),
                   const SizedBox(height: AppSpacing.md),
-                  _NumberField(
-                    key: const Key('health-weight-field'),
-                    label: '체중',
-                    controller: _weightController,
-                    unit: 'kg',
-                    validator: (value) => _positiveDoubleValidator(value, '체중'),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text('혈압', style: Theme.of(context).textTheme.bodyLarge),
-                  const SizedBox(height: AppSpacing.xs),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _NumberField(
-                          key: const Key('health-systolic-field'),
-                          label: '수축기',
-                          controller: _systolicController,
-                          unit: null,
-                          validator: (value) =>
-                              _bloodPressureValidator(value, '수축기'),
-                        ),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.only(
-                          top: 18,
-                          left: AppSpacing.xs,
-                          right: AppSpacing.xs,
-                        ),
-                        child: Text('/'),
-                      ),
-                      Expanded(
-                        child: _NumberField(
-                          key: const Key('health-diastolic-field'),
-                          label: '이완기',
-                          controller: _diastolicController,
-                          unit: 'mmHg',
-                          validator: (value) =>
-                              _bloodPressureValidator(value, '이완기'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _NumberField(
-                    key: const Key('health-water-field'),
-                    label: '수분',
-                    controller: _waterController,
-                    unit: 'mL',
-                    validator: (value) => _positiveIntValidator(value, '수분'),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _NumberField(
-                    key: const Key('health-steps-field'),
-                    label: '운동',
-                    controller: _stepsController,
-                    unit: 'steps',
-                    validator: (value) => _positiveIntValidator(value, '운동'),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _NumberField(
-                    key: const Key('health-sleep-field'),
-                    label: '수면',
-                    controller: _sleepController,
-                    unit: '시간',
-                    validator: (value) => _positiveDoubleValidator(value, '수면'),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text('컨디션', style: Theme.of(context).textTheme.bodyLarge),
-                  const SizedBox(height: AppSpacing.xs),
-                  DropdownButtonFormField<HealthCondition>(
-                    key: const Key('health-condition-field'),
-                    initialValue: _condition,
-                    decoration: _inputDecoration(null),
-                    items: HealthCondition.values
-                        .map(
-                          (condition) => DropdownMenuItem(
-                            value: condition,
-                            child: Text(condition.label),
+                  if (visibility?.weightVisible ?? true) ...[
+                    _NumberField(
+                      key: const Key('health-weight-field'),
+                      label: '체중',
+                      controller: _weightController,
+                      unit: 'kg',
+                      validator: (value) =>
+                          _positiveDoubleValidator(value, '체중'),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  if (visibility?.bloodPressureVisible ?? true) ...[
+                    Text('혈압', style: Theme.of(context).textTheme.bodyLarge),
+                    const SizedBox(height: AppSpacing.xs),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _NumberField(
+                            key: const Key('health-systolic-field'),
+                            label: '수축기',
+                            controller: _systolicController,
+                            unit: null,
+                            validator: (value) =>
+                                _bloodPressureValidator(value, '수축기'),
                           ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _condition = value;
-                      });
-                    },
-                  ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.only(
+                            top: 18,
+                            left: AppSpacing.xs,
+                            right: AppSpacing.xs,
+                          ),
+                          child: Text('/'),
+                        ),
+                        Expanded(
+                          child: _NumberField(
+                            key: const Key('health-diastolic-field'),
+                            label: '이완기',
+                            controller: _diastolicController,
+                            unit: 'mmHg',
+                            validator: (value) =>
+                                _bloodPressureValidator(value, '이완기'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  if (visibility?.waterIntakeVisible ?? true) ...[
+                    _NumberField(
+                      key: const Key('health-water-field'),
+                      label: '수분',
+                      controller: _waterController,
+                      unit: 'mL',
+                      validator: (value) => _positiveIntValidator(value, '수분'),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  if (visibility?.stepsVisible ?? true) ...[
+                    _NumberField(
+                      key: const Key('health-steps-field'),
+                      label: '운동',
+                      controller: _stepsController,
+                      unit: 'steps',
+                      validator: (value) => _positiveIntValidator(value, '운동'),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  if (visibility?.sleepHoursVisible ?? true) ...[
+                    _NumberField(
+                      key: const Key('health-sleep-field'),
+                      label: '수면',
+                      controller: _sleepController,
+                      unit: '시간',
+                      validator: (value) =>
+                          _positiveDoubleValidator(value, '수면'),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  if (visibility?.conditionVisible ?? true) ...[
+                    Text('컨디션', style: Theme.of(context).textTheme.bodyLarge),
+                    const SizedBox(height: AppSpacing.xs),
+                    DropdownButtonFormField<HealthCondition>(
+                      key: const Key('health-condition-field'),
+                      initialValue: _condition,
+                      decoration: _inputDecoration(null),
+                      items: HealthCondition.values
+                          .map(
+                            (condition) => DropdownMenuItem(
+                              value: condition,
+                              child: Text(condition.label),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _condition = value;
+                        });
+                      },
+                    ),
+                  ],
                   if (_formError != null) ...[
                     const SizedBox(height: AppSpacing.sm),
                     Text(
@@ -404,6 +426,9 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
   }
 
   bool get _bloodPressurePairValid {
+    if (!(widget.healthFieldVisibilityService?.bloodPressureVisible ?? true)) {
+      return true;
+    }
     final hasSystolic = _systolicController.text.trim().isNotEmpty;
     final hasDiastolic = _diastolicController.text.trim().isNotEmpty;
     return hasSystolic == hasDiastolic;

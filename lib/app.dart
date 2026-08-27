@@ -8,6 +8,7 @@ import 'screens/lab/lab_screen.dart';
 import 'screens/medication/medication_screen.dart';
 import 'screens/statistics/statistics_screen.dart';
 import 'services/backup_service.dart';
+import 'services/health_field_visibility_service.dart';
 import 'services/health_record_service.dart';
 import 'services/lab_result_service.dart';
 import 'services/medication_service.dart';
@@ -20,12 +21,14 @@ class MyHealthLogApp extends StatelessWidget {
     this.medicationService,
     this.labResultService,
     this.symptomService,
+    this.healthFieldVisibilityService,
   });
 
   final HealthRecordService? healthRecordService;
   final MedicationService? medicationService;
   final LabResultService? labResultService;
   final SymptomService? symptomService;
+  final HealthFieldVisibilityService? healthFieldVisibilityService;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +41,7 @@ class MyHealthLogApp extends StatelessWidget {
         medicationService: medicationService,
         labResultService: labResultService,
         symptomService: symptomService,
+        healthFieldVisibilityService: healthFieldVisibilityService,
       ),
     );
   }
@@ -49,12 +53,14 @@ class _AppBootstrap extends StatefulWidget {
     this.medicationService,
     this.labResultService,
     this.symptomService,
+    this.healthFieldVisibilityService,
   });
 
   final HealthRecordService? healthRecordService;
   final MedicationService? medicationService;
   final LabResultService? labResultService;
   final SymptomService? symptomService;
+  final HealthFieldVisibilityService? healthFieldVisibilityService;
 
   @override
   State<_AppBootstrap> createState() => _AppBootstrapState();
@@ -65,6 +71,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
   late final MedicationService _medicationService;
   late final LabResultService _labResultService;
   late final SymptomService _symptomService;
+  late final HealthFieldVisibilityService _fieldVisibilityService;
   late final Future<void> _loadFuture;
 
   @override
@@ -85,11 +92,17 @@ class _AppBootstrapState extends State<_AppBootstrap> {
               ? InMemorySymptomStorage()
               : SqfliteSymptomStorage(),
         );
+    _fieldVisibilityService =
+        widget.healthFieldVisibilityService ??
+        (_hasInjectedServices
+            ? HealthFieldVisibilityService.inMemory()
+            : HealthFieldVisibilityService());
     _loadFuture = Future.wait<void>([
       _healthService.load(),
       _medicationService.load(),
       _labResultService.load(),
       _symptomService.load(),
+      _fieldVisibilityService.load(),
     ]);
   }
 
@@ -123,6 +136,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
           medicationService: _medicationService,
           labResultService: _labResultService,
           symptomService: _symptomService,
+          healthFieldVisibilityService: _fieldVisibilityService,
         );
       },
     );
@@ -136,12 +150,14 @@ class AppShell extends StatefulWidget {
     required this.medicationService,
     required this.labResultService,
     required this.symptomService,
+    required this.healthFieldVisibilityService,
   });
 
   final HealthRecordService healthRecordService;
   final MedicationService medicationService;
   final LabResultService labResultService;
   final SymptomService symptomService;
+  final HealthFieldVisibilityService healthFieldVisibilityService;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -162,6 +178,7 @@ class _AppShellState extends State<AppShell> {
       HomeScreen(
         healthRecordService: widget.healthRecordService,
         medicationService: widget.medicationService,
+        healthFieldVisibilityService: widget.healthFieldVisibilityService,
         onOpenHealthRoot: () => _selectTab(1),
         onOpenMedication: () => _selectTab(2),
         onOpenDataManagement: _openDataManagement,
@@ -169,12 +186,17 @@ class _AppShellState extends State<AppShell> {
       HealthScreen(
         service: widget.healthRecordService,
         symptomService: widget.symptomService,
+        healthFieldVisibilityService: widget.healthFieldVisibilityService,
       ),
-      MedicationScreen(service: widget.medicationService),
+      MedicationScreen(
+        service: widget.medicationService,
+        symptomService: widget.symptomService,
+      ),
       LabScreen(service: widget.labResultService),
       StatisticsScreen(
         healthRecordService: widget.healthRecordService,
         labResultService: widget.labResultService,
+        healthFieldVisibilityService: widget.healthFieldVisibilityService,
         onOpenHealth: () => _selectTab(1),
         onOpenLab: () => _selectTab(3),
       ),
@@ -224,6 +246,7 @@ class _AppShellState extends State<AppShell> {
           healthRecordService: widget.healthRecordService,
           medicationService: widget.medicationService,
           labResultService: widget.labResultService,
+          symptomService: widget.symptomService,
         ),
       ),
     );

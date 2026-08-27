@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/health_record.dart';
 import '../models/lab_result.dart';
 import '../models/medication.dart';
+import '../models/symptom.dart';
 import 'app_database.dart';
 
 class BackupValidationException implements Exception {
@@ -28,6 +29,9 @@ class BackupSnapshot {
     required this.labResults,
     this.prnMedicationLogs = const [],
     this.medicationDoseHistory = const [],
+    this.symptomDefinitions = const [],
+    this.symptomRecords = const [],
+    this.prnSymptomLinks = const [],
   });
 
   final List<HealthRecord> healthRecords;
@@ -35,6 +39,9 @@ class BackupSnapshot {
   final List<MedicationLog> medicationLogs;
   final List<PrnMedicationLog> prnMedicationLogs;
   final List<MedicationDoseHistory> medicationDoseHistory;
+  final List<SymptomDefinition> symptomDefinitions;
+  final List<SymptomRecord> symptomRecords;
+  final List<PrnSymptomLink> prnSymptomLinks;
   final List<LabResult> labResults;
 
   Map<String, Object?> toJson() {
@@ -48,11 +55,19 @@ class BackupSnapshot {
       'medicationDoseHistory': medicationDoseHistory
           .map((item) => item.toMap())
           .toList(),
+      'symptomDefinitions': symptomDefinitions
+          .map((definition) => definition.toMap())
+          .toList(),
+      'symptomRecords': symptomRecords.map((record) => record.toMap()).toList(),
+      'prnSymptomLinks': prnSymptomLinks.map((link) => link.toMap()).toList(),
       'labResults': labResults.map((result) => result.toMap()).toList(),
     };
   }
 
-  factory BackupSnapshot.fromJson(Map<String, Object?> json) {
+  factory BackupSnapshot.fromJson(
+    Map<String, Object?> json, {
+    required int backupVersion,
+  }) {
     final healthRecords = _readCollection(
       json,
       'healthRecords',
@@ -78,9 +93,31 @@ class BackupSnapshot {
       'medicationDoseHistory',
       MedicationDoseHistory.fromMap,
     );
+    final symptomDefinitions = _readVersionedCollection(
+      json,
+      'symptomDefinitions',
+      SymptomDefinition.fromMap,
+      isRequired: backupVersion >= 4,
+    );
+    final symptomRecords = _readVersionedCollection(
+      json,
+      'symptomRecords',
+      SymptomRecord.fromMap,
+      isRequired: backupVersion >= 4,
+    );
+    final prnSymptomLinks = _readVersionedCollection(
+      json,
+      'prnSymptomLinks',
+      PrnSymptomLink.fromMap,
+      isRequired: backupVersion >= 4,
+    );
     final labResults = _readCollection(json, 'labResults', LabResult.fromMap);
 
     final medicationIds = medications.map((item) => item.id).toSet();
+    final prnLogIds = prnMedicationLogs.map((item) => item.id).toSet();
+    final symptomDefinitionIds = symptomDefinitions
+        .map((item) => item.id)
+        .toSet();
     if (medicationLogs.any(
           (log) => !medicationIds.contains(log.medicationId),
         ) ||
@@ -89,6 +126,15 @@ class BackupSnapshot {
         ) ||
         medicationDoseHistory.any(
           (item) => !medicationIds.contains(item.medicationId),
+        ) ||
+        symptomRecords.any(
+          (record) =>
+              !symptomDefinitionIds.contains(record.symptomDefinitionId),
+        ) ||
+        prnSymptomLinks.any(
+          (link) =>
+              !prnLogIds.contains(link.prnMedicationLogId) ||
+              !symptomDefinitionIds.contains(link.symptomDefinitionId),
         )) {
       throw const BackupValidationException('백업 데이터가 손상되어 복원할 수 없습니다.');
     }
@@ -99,6 +145,9 @@ class BackupSnapshot {
       medicationLogs: medicationLogs,
       prnMedicationLogs: prnMedicationLogs,
       medicationDoseHistory: medicationDoseHistory,
+      symptomDefinitions: symptomDefinitions,
+      symptomRecords: symptomRecords,
+      prnSymptomLinks: prnSymptomLinks,
       labResults: labResults,
     );
   }
@@ -126,6 +175,18 @@ class BackupSnapshot {
       throw const BackupValidationException('백업 데이터가 손상되어 복원할 수 없습니다.');
     }
     return _parseCollection(value, parse);
+  }
+
+  static List<T> _readVersionedCollection<T>(
+    Map<String, Object?> json,
+    String key,
+    T Function(Map<String, Object?> map) parse, {
+    required bool isRequired,
+  }) {
+    if (isRequired) {
+      return _readCollection(json, key, parse);
+    }
+    return _readOptionalCollection(json, key, parse);
   }
 
   static List<T> _parseCollection<T>(
@@ -158,8 +219,8 @@ class BackupDocument {
   });
 
   static const appName = 'My Health Log';
-  static const backupVersion = 3;
-  static const supportedBackupVersions = {1, 2, 3};
+  static const backupVersion = 4;
+  static const supportedBackupVersions = {1, 2, 3, 4};
 
   final DateTime createdAt;
   final String appVersion;
@@ -171,6 +232,9 @@ class BackupDocument {
         snapshot.medicationLogs.length +
         snapshot.prnMedicationLogs.length +
         snapshot.medicationDoseHistory.length +
+        snapshot.symptomDefinitions.length +
+        snapshot.symptomRecords.length +
+        snapshot.prnSymptomLinks.length +
         snapshot.labResults.length;
   }
 
@@ -218,7 +282,10 @@ class BackupDocument {
       return BackupDocument(
         createdAt: DateTime.parse(json['createdAt'] as String),
         appVersion: json['appVersion'] as String,
-        snapshot: BackupSnapshot.fromJson(Map<String, Object?>.from(data)),
+        snapshot: BackupSnapshot.fromJson(
+          Map<String, Object?>.from(data),
+          backupVersion: version,
+        ),
       );
     } on BackupValidationException {
       rethrow;
@@ -239,6 +306,9 @@ class SqfliteBackupRepository implements BackupRepository {
   static const _medicationLogsTable = 'medication_logs';
   static const _prnMedicationLogsTable = 'prn_medication_logs';
   static const _doseHistoryTable = 'medication_dose_history';
+  static const _symptomDefinitionsTable = 'symptom_definitions';
+  static const _symptomRecordsTable = 'symptom_records';
+  static const _prnSymptomLinksTable = 'prn_symptom_links';
   static const _labResultsTable = 'lab_results';
 
   @override
@@ -264,6 +334,18 @@ class SqfliteBackupRepository implements BackupRepository {
       _doseHistoryTable,
       orderBy: 'changedAt ASC',
     );
+    final symptomDefinitionRows = await db.query(
+      _symptomDefinitionsTable,
+      orderBy: 'sortOrder ASC, name ASC',
+    );
+    final symptomRecordRows = await db.query(
+      _symptomRecordsTable,
+      orderBy: 'date DESC, symptomDefinitionId ASC',
+    );
+    final prnSymptomLinkRows = await db.query(
+      _prnSymptomLinksTable,
+      orderBy: 'createdAt ASC',
+    );
     final labRows = await db.query(_labResultsTable, orderBy: 'date DESC');
 
     return BackupSnapshot(
@@ -274,6 +356,11 @@ class SqfliteBackupRepository implements BackupRepository {
       medicationDoseHistory: historyRows
           .map(MedicationDoseHistory.fromMap)
           .toList(),
+      symptomDefinitions: symptomDefinitionRows
+          .map(SymptomDefinition.fromMap)
+          .toList(),
+      symptomRecords: symptomRecordRows.map(SymptomRecord.fromMap).toList(),
+      prnSymptomLinks: prnSymptomLinkRows.map(PrnSymptomLink.fromMap).toList(),
       labResults: labRows.map(LabResult.fromMap).toList(),
     );
   }
@@ -282,10 +369,13 @@ class SqfliteBackupRepository implements BackupRepository {
   Future<void> replaceWith(BackupSnapshot snapshot) async {
     final db = await AppDatabase.open();
     await db.transaction((txn) async {
+      await txn.delete(_prnSymptomLinksTable);
+      await txn.delete(_symptomRecordsTable);
       await txn.delete(_doseHistoryTable);
       await txn.delete(_prnMedicationLogsTable);
       await txn.delete(_medicationLogsTable);
       await txn.delete(_medicationsTable);
+      await txn.delete(_symptomDefinitionsTable);
       await txn.delete(_healthRecordsTable);
       await txn.delete(_labResultsTable);
 
@@ -295,6 +385,9 @@ class SqfliteBackupRepository implements BackupRepository {
       for (final medication in snapshot.medications) {
         await txn.insert(_medicationsTable, medication.toMap());
       }
+      for (final definition in snapshot.symptomDefinitions) {
+        await txn.insert(_symptomDefinitionsTable, definition.toMap());
+      }
       for (final log in snapshot.medicationLogs) {
         await txn.insert(_medicationLogsTable, log.toMap());
       }
@@ -303,6 +396,12 @@ class SqfliteBackupRepository implements BackupRepository {
       }
       for (final item in snapshot.medicationDoseHistory) {
         await txn.insert(_doseHistoryTable, item.toMap());
+      }
+      for (final record in snapshot.symptomRecords) {
+        await txn.insert(_symptomRecordsTable, record.toMap());
+      }
+      for (final link in snapshot.prnSymptomLinks) {
+        await txn.insert(_prnSymptomLinksTable, link.toMap());
       }
       for (final result in snapshot.labResults) {
         await txn.insert(_labResultsTable, result.toMap());

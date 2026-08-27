@@ -38,6 +38,26 @@ class SymptomDefinition {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  SymptomDefinition copyWith({
+    String? id,
+    String? name,
+    bool? isDefault,
+    bool? isActive,
+    int? sortOrder,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return SymptomDefinition(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      isDefault: isDefault ?? this.isDefault,
+      isActive: isActive ?? this.isActive,
+      sortOrder: sortOrder ?? this.sortOrder,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
   Map<String, Object?> toMap() {
     return {
       'id': id,

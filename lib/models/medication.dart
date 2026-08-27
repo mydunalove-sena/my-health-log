@@ -455,6 +455,36 @@ class PrnMedicationLog {
   }
 }
 
+class PrnSymptomLink {
+  const PrnSymptomLink({
+    required this.id,
+    required this.prnMedicationLogId,
+    required this.symptomDefinitionId,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String prnMedicationLogId;
+  final String symptomDefinitionId;
+  final DateTime createdAt;
+
+  Map<String, Object?> toMap() => {
+    'id': id,
+    'prnMedicationLogId': prnMedicationLogId,
+    'symptomDefinitionId': symptomDefinitionId,
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory PrnSymptomLink.fromMap(Map<String, Object?> map) {
+    return PrnSymptomLink(
+      id: map['id'] as String,
+      prnMedicationLogId: map['prnMedicationLogId'] as String,
+      symptomDefinitionId: map['symptomDefinitionId'] as String,
+      createdAt: DateTime.parse(map['createdAt'] as String),
+    );
+  }
+}
+
 class MedicationDoseItem {
   const MedicationDoseItem({
     required this.medication,

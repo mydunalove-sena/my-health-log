@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_health_log/models/health_record.dart';
 import 'package:my_health_log/models/lab_result.dart';
 import 'package:my_health_log/models/medication.dart';
+import 'package:my_health_log/models/symptom.dart';
 import 'package:my_health_log/services/backup_service.dart';
 
 void main() {
@@ -19,11 +20,14 @@ void main() {
 
       expect(decoded.appVersion, 'test-version');
       expect(decoded.totalCount, 0);
-      expect(decoded.toJson()['backupVersion'], 3);
+      expect(decoded.toJson()['backupVersion'], 4);
       expect(decoded.snapshot.healthRecords, isEmpty);
       expect(decoded.snapshot.medications, isEmpty);
       expect(decoded.snapshot.medicationLogs, isEmpty);
       expect(decoded.snapshot.prnMedicationLogs, isEmpty);
+      expect(decoded.snapshot.symptomDefinitions, isEmpty);
+      expect(decoded.snapshot.symptomRecords, isEmpty);
+      expect(decoded.snapshot.prnSymptomLinks, isEmpty);
       expect(decoded.snapshot.labResults, isEmpty);
     });
 
@@ -153,6 +157,197 @@ void main() {
         MedicationDoseUnit.tablet,
       );
       expect(decoded.snapshot.prnMedicationLogs, isEmpty);
+      expect(decoded.snapshot.symptomDefinitions, isEmpty);
+      expect(decoded.snapshot.symptomRecords, isEmpty);
+      expect(decoded.snapshot.prnSymptomLinks, isEmpty);
+    });
+
+    test('symptom definitions round-trip through backup restore', () async {
+      final original = _symptomSnapshot(idSuffix: 'original');
+      final repository = InMemoryBackupRepository(original);
+      final service = BackupService(repository: repository);
+      final backup = await service.createBackup(createdAt: _dateTime());
+
+      await repository.replaceWith(_symptomSnapshot(idSuffix: 'changed'));
+      await service.restoreBackup(
+        service.validateBackup(backup.toPrettyJson()),
+      );
+
+      final restored = await repository.fetchSnapshot();
+      expect(restored.symptomDefinitions, hasLength(1));
+      expect(
+        restored.symptomDefinitions.single.toMap(),
+        original.symptomDefinitions.single.toMap(),
+      );
+    });
+
+    test(
+      'user-added and renamed symptom definition round-trips with records and PRN links',
+      () async {
+        final original = _userSymptomSnapshot();
+        final repository = InMemoryBackupRepository(original);
+        final service = BackupService(repository: repository);
+        final backup = await service.createBackup(createdAt: _dateTime());
+
+        await repository.replaceWith(_symptomSnapshot(idSuffix: 'changed'));
+        await service.restoreBackup(
+          service.validateBackup(backup.toPrettyJson()),
+        );
+
+        final restored = await repository.fetchSnapshot();
+        expect(restored.symptomDefinitions, hasLength(1));
+        expect(restored.symptomDefinitions.single.toMap(), {
+          'id': 'symptom-user-neck-pain',
+          'name': '목 통증',
+          'isDefault': 0,
+          'isActive': 1,
+          'sortOrder': 50,
+          'createdAt': _dateTime().toIso8601String(),
+          'updatedAt': DateTime(2026, 8, 24, 11).toIso8601String(),
+        });
+        expect(restored.symptomRecords.single.symptomDefinitionId, 'symptom-user-neck-pain');
+        expect(restored.symptomRecords.single.severity, SymptomSeverity.severe);
+        expect(restored.prnSymptomLinks.single.symptomDefinitionId, 'symptom-user-neck-pain');
+        expect(restored.toJson(), original.toJson());
+      },
+    );
+
+    test('symptom records round-trip with severity', () async {
+      final original = _symptomSnapshot(idSuffix: 'original');
+      final repository = InMemoryBackupRepository(original);
+      final service = BackupService(repository: repository);
+      final backup = await service.createBackup(createdAt: _dateTime());
+
+      await repository.replaceWith(_symptomSnapshot(idSuffix: 'changed'));
+      await service.restoreBackup(
+        service.validateBackup(backup.toPrettyJson()),
+      );
+
+      final restored = await repository.fetchSnapshot();
+      expect(restored.symptomRecords, hasLength(1));
+      expect(restored.symptomRecords.single.toMap(), {
+        'id': 'symptom-record-original',
+        'symptomDefinitionId': 'symptom-original',
+        'date': '2026-08-24',
+        'severity': 'severe',
+        'createdAt': _dateTime().toIso8601String(),
+        'updatedAt': _dateTime().toIso8601String(),
+      });
+    });
+
+    test('PRN symptom links round-trip with log and symptom IDs', () async {
+      final original = _symptomSnapshot(idSuffix: 'original');
+      final repository = InMemoryBackupRepository(original);
+      final service = BackupService(repository: repository);
+      final backup = await service.createBackup(createdAt: _dateTime());
+
+      await repository.replaceWith(_symptomSnapshot(idSuffix: 'changed'));
+      await service.restoreBackup(
+        service.validateBackup(backup.toPrettyJson()),
+      );
+
+      final restored = await repository.fetchSnapshot();
+      expect(restored.prnSymptomLinks, hasLength(1));
+      expect(
+        restored.prnSymptomLinks.single.prnMedicationLogId,
+        'prn-log-original',
+      );
+      expect(
+        restored.prnSymptomLinks.single.symptomDefinitionId,
+        'symptom-original',
+      );
+    });
+
+    test('restore replaces symptom and PRN symptom link data', () async {
+      final stale = _symptomSnapshot(idSuffix: 'stale');
+      final replacement = _symptomSnapshot(
+        idSuffix: 'replacement',
+        includeSymptomRecord: false,
+        includePrnSymptomLink: false,
+      );
+      final repository = InMemoryBackupRepository(stale);
+      final service = BackupService(repository: repository);
+
+      await service.restoreBackup(
+        BackupDocument(
+          createdAt: _dateTime(),
+          appVersion: '1',
+          snapshot: replacement,
+        ),
+      );
+
+      final restored = await repository.fetchSnapshot();
+      expect(restored.symptomDefinitions.map((item) => item.id), [
+        'symptom-replacement',
+      ]);
+      expect(restored.symptomRecords, isEmpty);
+      expect(restored.prnSymptomLinks, isEmpty);
+    });
+
+    test(
+      'legacy backup versions restore with empty symptom collections',
+      () async {
+        for (final version in [1, 2, 3]) {
+          final repository = InMemoryBackupRepository(
+            _symptomSnapshot(idSuffix: 'stale-$version'),
+          );
+          final service = BackupService(repository: repository);
+          final legacy = jsonEncode({
+            'app': 'My Health Log',
+            'backupVersion': version,
+            'createdAt': '2026-08-24T10:30:45.000',
+            'appVersion': '1.0.1+2',
+            'data': {
+              'healthRecords': <Object?>[],
+              'medications': <Object?>[],
+              'medicationLogs': <Object?>[],
+              if (version >= 2) 'prnMedicationLogs': <Object?>[],
+              if (version >= 3) 'medicationDoseHistory': <Object?>[],
+              'labResults': <Object?>[],
+            },
+          });
+
+          await service.restoreBackup(service.validateBackup(legacy));
+
+          final restored = await repository.fetchSnapshot();
+          expect(restored.symptomDefinitions, isEmpty);
+          expect(restored.symptomRecords, isEmpty);
+          expect(restored.prnSymptomLinks, isEmpty);
+        }
+      },
+    );
+
+    test('backup version 4 requires symptom definitions collection', () {
+      final service = BackupService(repository: InMemoryBackupRepository());
+
+      expect(
+        () => service.validateBackup(
+          _version4BackupJson(omitKey: 'symptomDefinitions'),
+        ),
+        throwsA(isA<BackupValidationException>()),
+      );
+    });
+
+    test('backup version 4 requires symptom records collection', () {
+      final service = BackupService(repository: InMemoryBackupRepository());
+
+      expect(
+        () => service.validateBackup(
+          _version4BackupJson(omitKey: 'symptomRecords'),
+        ),
+        throwsA(isA<BackupValidationException>()),
+      );
+    });
+
+    test('backup version 4 requires PRN symptom links collection', () {
+      final service = BackupService(repository: InMemoryBackupRepository());
+
+      expect(
+        () => service.validateBackup(
+          _version4BackupJson(omitKey: 'prnSymptomLinks'),
+        ),
+        throwsA(isA<BackupValidationException>()),
+      );
     });
 
     test('rejects invalid backup files', () {
@@ -280,6 +475,10 @@ extension on BackupSnapshot {
         medications.length +
         medicationLogs.length +
         prnMedicationLogs.length +
+        medicationDoseHistory.length +
+        symptomDefinitions.length +
+        symptomRecords.length +
+        prnSymptomLinks.length +
         labResults.length;
   }
 }
@@ -361,6 +560,168 @@ BackupSnapshot _snapshot({String idSuffix = 'sample'}) {
       ),
     ],
   );
+}
+
+BackupSnapshot _symptomSnapshot({
+  required String idSuffix,
+  bool includeSymptomRecord = true,
+  bool includePrnSymptomLink = true,
+}) {
+  final now = _dateTime();
+  final day = DateTime(2026, 8, 24);
+  final medicationId = 'prn-med-$idSuffix';
+  final symptomId = 'symptom-$idSuffix';
+  final prnLogId = 'prn-log-$idSuffix';
+  return BackupSnapshot(
+    healthRecords: const [],
+    medications: [
+      Medication(
+        id: medicationId,
+        name: 'PRN medication $idSuffix',
+        type: MedicationType.prn,
+        morning: false,
+        lunch: false,
+        evening: false,
+        bedtime: false,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    ],
+    medicationLogs: const [],
+    prnMedicationLogs: [
+      PrnMedicationLog(
+        id: prnLogId,
+        medicationId: medicationId,
+        date: day,
+        takenAt: DateTime(2026, 8, 24, 9),
+        createdAt: now,
+        updatedAt: now,
+      ),
+    ],
+    symptomDefinitions: [
+      SymptomDefinition(
+        id: symptomId,
+        name: 'Symptom $idSuffix',
+        isDefault: false,
+        isActive: true,
+        sortOrder: 10,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    ],
+    symptomRecords: includeSymptomRecord
+        ? [
+            SymptomRecord(
+              id: 'symptom-record-$idSuffix',
+              symptomDefinitionId: symptomId,
+              date: day,
+              severity: SymptomSeverity.severe,
+              createdAt: now,
+              updatedAt: now,
+            ),
+          ]
+        : const [],
+    prnSymptomLinks: includePrnSymptomLink
+        ? [
+            PrnSymptomLink(
+              id: 'prn-symptom-link-$idSuffix',
+              prnMedicationLogId: prnLogId,
+              symptomDefinitionId: symptomId,
+              createdAt: now,
+            ),
+          ]
+        : const [],
+    labResults: const [],
+  );
+}
+
+BackupSnapshot _userSymptomSnapshot() {
+  final now = _dateTime();
+  final updatedAt = DateTime(2026, 8, 24, 11);
+  const symptomId = 'symptom-user-neck-pain';
+  const medicationId = 'prn-med-user';
+  const prnLogId = 'prn-log-user';
+  final day = DateTime(2026, 8, 24);
+  return BackupSnapshot(
+    healthRecords: const [],
+    medications: [
+      Medication(
+        id: medicationId,
+        name: 'PRN medication user',
+        type: MedicationType.prn,
+        morning: false,
+        lunch: false,
+        evening: false,
+        bedtime: false,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    ],
+    medicationLogs: const [],
+    prnMedicationLogs: [
+      PrnMedicationLog(
+        id: prnLogId,
+        medicationId: medicationId,
+        date: day,
+        takenAt: DateTime(2026, 8, 24, 9),
+        createdAt: now,
+        updatedAt: now,
+      ),
+    ],
+    symptomDefinitions: [
+      SymptomDefinition(
+        id: symptomId,
+        name: '목 통증',
+        isDefault: false,
+        isActive: true,
+        sortOrder: 50,
+        createdAt: now,
+        updatedAt: updatedAt,
+      ),
+    ],
+    symptomRecords: [
+      SymptomRecord(
+        id: 'symptom-record-user',
+        symptomDefinitionId: symptomId,
+        date: day,
+        severity: SymptomSeverity.severe,
+        createdAt: now,
+        updatedAt: updatedAt,
+      ),
+    ],
+    prnSymptomLinks: [
+      PrnSymptomLink(
+        id: 'prn-symptom-link-user',
+        prnMedicationLogId: prnLogId,
+        symptomDefinitionId: symptomId,
+        createdAt: now,
+      ),
+    ],
+    labResults: const [],
+  );
+}
+
+String _version4BackupJson({required String omitKey}) {
+  final data = <String, Object?>{
+    'healthRecords': <Object?>[],
+    'medications': <Object?>[],
+    'medicationLogs': <Object?>[],
+    'prnMedicationLogs': <Object?>[],
+    'medicationDoseHistory': <Object?>[],
+    'symptomDefinitions': <Object?>[],
+    'symptomRecords': <Object?>[],
+    'prnSymptomLinks': <Object?>[],
+    'labResults': <Object?>[],
+  }..remove(omitKey);
+  return jsonEncode({
+    'app': 'My Health Log',
+    'backupVersion': 4,
+    'createdAt': '2026-08-24T10:30:45.000',
+    'appVersion': '1.0.1+2',
+    'data': data,
+  });
 }
 
 DateTime _dateTime() => DateTime(2026, 8, 24, 10, 30, 45);

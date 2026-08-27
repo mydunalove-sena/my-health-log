@@ -4,17 +4,21 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/medication.dart';
+import '../../models/symptom.dart';
 import '../../services/medication_service.dart';
+import '../../services/symptom_service.dart';
 
 class PrnMedicationLogFormScreen extends StatefulWidget {
   const PrnMedicationLogFormScreen({
     super.key,
     required this.service,
     required this.medication,
+    this.symptomService,
   });
 
   final MedicationService service;
   final Medication medication;
+  final SymptomService? symptomService;
 
   @override
   State<PrnMedicationLogFormScreen> createState() =>
@@ -29,6 +33,7 @@ class _PrnMedicationLogFormScreenState
   late final TextEditingController _doseController;
   late MedicationDoseUnit _doseUnit;
   late final TextEditingController _noteController;
+  final Set<String> _selectedSymptomDefinitionIds = {};
   String? _formError;
 
   @override
@@ -147,6 +152,15 @@ class _PrnMedicationLogFormScreenState
                   maxLines: 4,
                   decoration: _inputDecoration(),
                 ),
+                if ((widget.symptomService?.definitions ?? const [])
+                    .isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _RelatedSymptomsField(
+                    definitions: widget.symptomService!.definitions,
+                    selectedIds: _selectedSymptomDefinitionIds,
+                    onChanged: _toggleSymptom,
+                  ),
+                ],
                 if (_formError != null) ...[
                   const SizedBox(height: AppSpacing.sm),
                   Text(
@@ -231,6 +245,7 @@ class _PrnMedicationLogFormScreenState
         doseValue: doseValue,
         doseUnit: doseValue == null ? null : _doseUnit,
         note: _noteController.text,
+        symptomDefinitionIds: _selectedSymptomDefinitionIds.toList(),
       );
     } on FuturePrnMedicationDateException {
       setState(() => _formError = '미래 날짜에는 복용 기록을 저장할 수 없습니다.');
@@ -257,6 +272,16 @@ class _PrnMedicationLogFormScreenState
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
     return '$year.$month.$day';
+  }
+
+  void _toggleSymptom(String symptomDefinitionId, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedSymptomDefinitionIds.add(symptomDefinitionId);
+      } else {
+        _selectedSymptomDefinitionIds.remove(symptomDefinitionId);
+      }
+    });
   }
 }
 
@@ -293,6 +318,57 @@ class _ActionField extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RelatedSymptomsField extends StatelessWidget {
+  const _RelatedSymptomsField({
+    required this.definitions,
+    required this.selectedIds,
+    required this.onChanged,
+  });
+
+  final List<SymptomDefinition> definitions;
+  final Set<String> selectedIds;
+  final void Function(String symptomDefinitionId, bool selected) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const Key('prn-related-symptoms'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('관련 증상 (선택)', style: Theme.of(context).textTheme.bodyLarge),
+        const SizedBox(height: AppSpacing.xs),
+        Material(
+          color: AppColors.surface,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.input),
+            side: const BorderSide(color: AppColors.border),
+          ),
+          child: Column(
+            children: [
+              for (var i = 0; i < definitions.length; i++) ...[
+                CheckboxListTile(
+                  key: ValueKey('prn-symptom-${definitions[i].id}'),
+                  value: selectedIds.contains(definitions[i].id),
+                  onChanged: (value) =>
+                      onChanged(definitions[i].id, value ?? false),
+                  title: Text(definitions[i].name),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                  ),
+                ),
+                if (i != definitions.length - 1)
+                  const Divider(height: 1, color: AppColors.border),
+              ],
+            ],
           ),
         ),
       ],

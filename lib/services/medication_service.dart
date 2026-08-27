@@ -38,6 +38,7 @@ abstract class MedicationStorage {
   Future<List<MedicationLog>> fetchAllLogs();
   Future<List<PrnMedicationLog>> fetchPrnLogsForDate(DateTime date);
   Future<List<PrnMedicationLog>> fetchAllPrnLogs();
+  Future<List<PrnSymptomLink>> fetchAllPrnSymptomLinks();
   Future<List<MedicationDoseHistory>> fetchDoseHistory(String medicationId);
   Future<List<MedicationDoseHistory>> fetchAllDoseHistory();
   Future<void> insertMedication(Medication medication);
@@ -52,7 +53,10 @@ abstract class MedicationStorage {
     DateTime updatedAt,
   );
   Future<void> upsertMedicationLog(MedicationLog log);
-  Future<void> insertPrnMedicationLog(PrnMedicationLog log);
+  Future<void> insertPrnMedicationLog(
+    PrnMedicationLog log, {
+    List<PrnSymptomLink> symptomLinks = const [],
+  });
   Future<void> deletePrnMedicationLog(String id);
 }
 
@@ -63,6 +67,7 @@ class MedicationService extends ChangeNotifier {
   final List<Medication> _activeMedications = [];
   final Map<String, MedicationLog> _logsByKey = {};
   final List<PrnMedicationLog> _prnLogsForLoadedDate = [];
+  final List<PrnSymptomLink> _prnSymptomLinks = [];
   DateTime _loadedDate = _today();
 
   List<Medication> get activeMedications =>
@@ -90,6 +95,9 @@ class MedicationService extends ChangeNotifier {
     _prnLogsForLoadedDate
       ..clear()
       ..addAll(await _storage.fetchPrnLogsForDate(_loadedDate));
+    _prnSymptomLinks
+      ..clear()
+      ..addAll(await _storage.fetchAllPrnSymptomLinks());
     _sortPrnLogs();
     notifyListeners();
   }
@@ -114,6 +122,21 @@ class MedicationService extends ChangeNotifier {
   List<PrnMedicationLog> prnLogsForMedication(String medicationId) {
     return List.unmodifiable(
       _prnLogsForLoadedDate.where((log) => log.medicationId == medicationId),
+    );
+  }
+
+  List<PrnSymptomLink> prnSymptomLinksForLog(String prnMedicationLogId) {
+    return List.unmodifiable(
+      _prnSymptomLinks.where(
+        (link) => link.prnMedicationLogId == prnMedicationLogId,
+      ),
+    );
+  }
+
+  List<String> symptomDefinitionIdsForPrnLog(String prnMedicationLogId) {
+    return List.unmodifiable(
+      prnSymptomLinksForLog(prnMedicationLogId)
+          .map((link) => link.symptomDefinitionId),
     );
   }
 
@@ -261,6 +284,7 @@ class MedicationService extends ChangeNotifier {
     double? doseValue,
     MedicationDoseUnit? doseUnit,
     String? note,
+    List<String> symptomDefinitionIds = const [],
     DateTime? now,
   }) async {
     if (!medication.isPrn) {
@@ -295,13 +319,19 @@ class MedicationService extends ChangeNotifier {
       createdAt: currentNow,
       updatedAt: currentNow,
     );
+    final symptomLinks = _buildPrnSymptomLinks(
+      logId: log.id,
+      symptomDefinitionIds: symptomDefinitionIds,
+      createdAt: currentNow,
+    );
 
-    await _storage.insertPrnMedicationLog(log);
+    await _storage.insertPrnMedicationLog(log, symptomLinks: symptomLinks);
     if (MedicationLog.formatDateKey(takenDate) ==
         MedicationLog.formatDateKey(_loadedDate)) {
       _prnLogsForLoadedDate.add(log);
       _sortPrnLogs();
     }
+    _prnSymptomLinks.addAll(symptomLinks);
     notifyListeners();
     return log;
   }
@@ -309,6 +339,7 @@ class MedicationService extends ChangeNotifier {
   Future<void> deletePrnLog(String id) async {
     await _storage.deletePrnMedicationLog(id);
     _prnLogsForLoadedDate.removeWhere((log) => log.id == id);
+    _prnSymptomLinks.removeWhere((link) => link.prnMedicationLogId == id);
     notifyListeners();
   }
 
@@ -316,6 +347,9 @@ class MedicationService extends ChangeNotifier {
 
   Future<List<PrnMedicationLog>> allPrnLogsForTest() =>
       _storage.fetchAllPrnLogs();
+
+  Future<List<PrnSymptomLink>> allPrnSymptomLinksForTest() =>
+      _storage.fetchAllPrnSymptomLinks();
 
   Future<List<MedicationDoseHistory>> allDoseHistoryForTest() =>
       _storage.fetchAllDoseHistory();
@@ -340,6 +374,27 @@ class MedicationService extends ChangeNotifier {
       changedAt: changedAt,
       createdAt: changedAt,
     );
+  }
+
+  List<PrnSymptomLink> _buildPrnSymptomLinks({
+    required String logId,
+    required List<String> symptomDefinitionIds,
+    required DateTime createdAt,
+  }) {
+    final uniqueIds = <String>{
+      for (final id in symptomDefinitionIds)
+        if (id.trim().isNotEmpty) id.trim(),
+    }.toList();
+    uniqueIds.sort();
+    return [
+      for (final symptomDefinitionId in uniqueIds)
+        PrnSymptomLink(
+          id: 'prnsymptom-$logId-$symptomDefinitionId',
+          prnMedicationLogId: logId,
+          symptomDefinitionId: symptomDefinitionId,
+          createdAt: createdAt,
+        ),
+    ];
   }
 
   bool _hasDoseChanged(Medication previous, Medication next) {
@@ -374,6 +429,7 @@ class SqfliteMedicationStorage implements MedicationStorage {
   static const _medicationsTable = 'medications';
   static const _logsTable = 'medication_logs';
   static const _prnLogsTable = 'prn_medication_logs';
+  static const _prnSymptomLinksTable = 'prn_symptom_links';
   static const _doseHistoryTable = 'medication_dose_history';
 
   Database? _database;
@@ -435,6 +491,16 @@ class SqfliteMedicationStorage implements MedicationStorage {
     final db = await _db;
     final rows = await db.query(_prnLogsTable, orderBy: 'takenAt ASC');
     return rows.map(PrnMedicationLog.fromMap).toList();
+  }
+
+  @override
+  Future<List<PrnSymptomLink>> fetchAllPrnSymptomLinks() async {
+    final db = await _db;
+    final rows = await db.query(
+      _prnSymptomLinksTable,
+      orderBy: 'createdAt ASC',
+    );
+    return rows.map(PrnSymptomLink.fromMap).toList();
   }
 
   @override
@@ -527,15 +593,34 @@ class SqfliteMedicationStorage implements MedicationStorage {
   }
 
   @override
-  Future<void> insertPrnMedicationLog(PrnMedicationLog log) async {
+  Future<void> insertPrnMedicationLog(
+    PrnMedicationLog log, {
+    List<PrnSymptomLink> symptomLinks = const [],
+  }) async {
     final db = await _db;
-    await db.insert(_prnLogsTable, log.toMap());
+    await db.transaction((txn) async {
+      await txn.insert(_prnLogsTable, log.toMap());
+      for (final link in symptomLinks) {
+        await txn.insert(
+          _prnSymptomLinksTable,
+          link.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+    });
   }
 
   @override
   Future<void> deletePrnMedicationLog(String id) async {
     final db = await _db;
-    await db.delete(_prnLogsTable, where: 'id = ?', whereArgs: [id]);
+    await db.transaction((txn) async {
+      await txn.delete(
+        _prnSymptomLinksTable,
+        where: 'prnMedicationLogId = ?',
+        whereArgs: [id],
+      );
+      await txn.delete(_prnLogsTable, where: 'id = ?', whereArgs: [id]);
+    });
   }
 }
 
@@ -544,15 +629,18 @@ class InMemoryMedicationStorage implements MedicationStorage {
     List<Medication>? medications,
     List<MedicationLog>? logs,
     List<PrnMedicationLog>? prnLogs,
+    List<PrnSymptomLink>? prnSymptomLinks,
     List<MedicationDoseHistory>? doseHistory,
   }) : _medications = List.of(medications ?? const []),
        _logs = List.of(logs ?? const []),
        _prnLogs = List.of(prnLogs ?? const []),
+       _prnSymptomLinks = List.of(prnSymptomLinks ?? const []),
        _doseHistory = List.of(doseHistory ?? const []);
 
   final List<Medication> _medications;
   final List<MedicationLog> _logs;
   final List<PrnMedicationLog> _prnLogs;
+  final List<PrnSymptomLink> _prnSymptomLinks;
   final List<MedicationDoseHistory> _doseHistory;
 
   @override
@@ -579,6 +667,10 @@ class InMemoryMedicationStorage implements MedicationStorage {
 
   @override
   Future<List<PrnMedicationLog>> fetchAllPrnLogs() async => List.of(_prnLogs);
+
+  @override
+  Future<List<PrnSymptomLink>> fetchAllPrnSymptomLinks() async =>
+      List.of(_prnSymptomLinks);
 
   @override
   Future<List<MedicationDoseHistory>> fetchDoseHistory(
@@ -652,12 +744,26 @@ class InMemoryMedicationStorage implements MedicationStorage {
   }
 
   @override
-  Future<void> insertPrnMedicationLog(PrnMedicationLog log) async {
+  Future<void> insertPrnMedicationLog(
+    PrnMedicationLog log, {
+    List<PrnSymptomLink> symptomLinks = const [],
+  }) async {
     _prnLogs.add(log);
+    for (final link in symptomLinks) {
+      final exists = _prnSymptomLinks.any(
+        (item) =>
+            item.prnMedicationLogId == link.prnMedicationLogId &&
+            item.symptomDefinitionId == link.symptomDefinitionId,
+      );
+      if (!exists) {
+        _prnSymptomLinks.add(link);
+      }
+    }
   }
 
   @override
   Future<void> deletePrnMedicationLog(String id) async {
+    _prnSymptomLinks.removeWhere((link) => link.prnMedicationLogId == id);
     _prnLogs.removeWhere((log) => log.id == id);
   }
 }

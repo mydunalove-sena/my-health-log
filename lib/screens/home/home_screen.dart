@@ -10,6 +10,7 @@ import '../../core/widgets/section_header.dart';
 import '../../models/health_record.dart';
 import '../../models/home_mock_state.dart';
 import '../../models/medication.dart';
+import '../../services/health_field_visibility_service.dart';
 import '../../services/health_record_service.dart';
 import '../../services/medication_service.dart';
 import '../health/health_form_screen.dart';
@@ -20,6 +21,7 @@ class HomeScreen extends StatelessWidget {
     super.key,
     this.healthRecordService,
     this.medicationService,
+    this.healthFieldVisibilityService,
     this.mockState,
     this.onOpenHealthRoot,
     this.onOpenMedication,
@@ -28,6 +30,7 @@ class HomeScreen extends StatelessWidget {
 
   final HealthRecordService? healthRecordService;
   final MedicationService? medicationService;
+  final HealthFieldVisibilityService? healthFieldVisibilityService;
   final HomeMockState? mockState;
   final VoidCallback? onOpenHealthRoot;
   final VoidCallback? onOpenMedication;
@@ -64,6 +67,7 @@ class HomeScreen extends StatelessWidget {
           healthRecord: mockState?.hasHealthRecord ?? true
               ? _mockHealthRecord()
               : null,
+          healthFieldVisibilityService: healthFieldVisibilityService,
           medicationItems: medicationItems,
           onOpenHealth: () {},
           onOpenMedication: onOpenMedication,
@@ -82,11 +86,11 @@ class HomeScreen extends StatelessWidget {
     }
 
     return AnimatedBuilder(
-      animation: Listenable.merge(
-        medService == null
-            ? <Listenable>[healthService]
-            : <Listenable>[healthService, medService],
-      ),
+      animation: Listenable.merge([
+        healthService,
+        ?medService,
+        ?healthFieldVisibilityService,
+      ]),
       builder: (context, _) {
         final todayRecord = healthService.todayRecord;
         final items = medService == null
@@ -98,12 +102,16 @@ class HomeScreen extends StatelessWidget {
         return _HomeContent(
           date: DateTime.now(),
           healthRecord: todayRecord,
+          healthFieldVisibilityService: healthFieldVisibilityService,
           medicationItems: items,
           onOpenHealth: () async {
             if (todayRecord == null) {
               await Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => HealthFormScreen(service: healthService),
+                  builder: (_) => HealthFormScreen(
+                    service: healthService,
+                    healthFieldVisibilityService: healthFieldVisibilityService,
+                  ),
                 ),
               );
             } else {
@@ -112,6 +120,7 @@ class HomeScreen extends StatelessWidget {
                   builder: (_) => HealthFormScreen(
                     service: healthService,
                     record: todayRecord,
+                    healthFieldVisibilityService: healthFieldVisibilityService,
                   ),
                 ),
               );
@@ -158,6 +167,7 @@ class _HomeContent extends StatelessWidget {
   const _HomeContent({
     required this.date,
     required this.healthRecord,
+    this.healthFieldVisibilityService,
     required this.medicationItems,
     required this.onOpenHealth,
     this.onOpenMedication,
@@ -167,6 +177,7 @@ class _HomeContent extends StatelessWidget {
 
   final DateTime date;
   final HealthRecord? healthRecord;
+  final HealthFieldVisibilityService? healthFieldVisibilityService;
   final List<_HomeMedicationItem> medicationItems;
   final VoidCallback onOpenHealth;
   final VoidCallback? onOpenMedication;
@@ -202,7 +213,11 @@ class _HomeContent extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: AppSpacing.xl),
-              _HealthSection(record: healthRecord, onOpenHealth: onOpenHealth),
+              _HealthSection(
+                record: healthRecord,
+                visibilityService: healthFieldVisibilityService,
+                onOpenHealth: onOpenHealth,
+              ),
               const SizedBox(height: AppSpacing.xl),
               _MedicationSection(
                 items: medicationItems,
@@ -234,10 +249,15 @@ class _HomeContent extends StatelessWidget {
 }
 
 class _HealthSection extends StatelessWidget {
-  const _HealthSection({required this.record, required this.onOpenHealth});
+  const _HealthSection({
+    required this.record,
+    required this.onOpenHealth,
+    this.visibilityService,
+  });
 
   final HealthRecord? record;
   final VoidCallback onOpenHealth;
+  final HealthFieldVisibilityService? visibilityService;
 
   @override
   Widget build(BuildContext context) {
@@ -248,56 +268,16 @@ class _HealthSection extends StatelessWidget {
         const SectionHeader(title: '\uC624\uB298\uC758 \uAC74\uAC15'),
         const SizedBox(height: AppSpacing.sm),
         if (currentRecord != null) ...[
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: AppSpacing.sm,
-            mainAxisSpacing: AppSpacing.sm,
-            childAspectRatio: 1.45,
-            children: [
-              HealthSummaryCard(
-                title: '\uCCB4\uC911',
-                value: _doubleText(currentRecord.weight),
-                unit: currentRecord.weight == null ? null : 'kg',
-                icon: Icons.monitor_weight_outlined,
-              ),
-              HealthSummaryCard(
-                title: '\uD608\uC555',
-                value: _bloodPressureText(currentRecord),
-                unit: currentRecord.systolicBloodPressure == null
-                    ? null
-                    : 'mmHg',
-                icon: Icons.favorite_outline,
-              ),
-              HealthSummaryCard(
-                title: '\uC218\uBD84',
-                value: _intText(currentRecord.waterIntake),
-                unit: currentRecord.waterIntake == null ? null : 'mL',
-                icon: Icons.water_drop_outlined,
-              ),
-              HealthSummaryCard(
-                title: '\uC6B4\uB3D9',
-                value: _intText(currentRecord.steps),
-                unit: currentRecord.steps == null ? null : '\uAC78\uC74C',
-                icon: Icons.directions_walk_outlined,
-              ),
-              HealthSummaryCard(
-                title: '\uC218\uBA74',
-                value: currentRecord.sleepHours == null
-                    ? '\uAE30\uB85D \uC5C6\uC74C'
-                    : '${_formatDouble(currentRecord.sleepHours!)}\uC2DC\uAC04',
-                icon: Icons.bedtime_outlined,
-              ),
-              HealthSummaryCard(
-                title: '\uCEE8\uB514\uC158',
-                value:
-                    currentRecord.condition?.label ??
-                    '\uAE30\uB85D \uC5C6\uC74C',
-                icon: Icons.sentiment_satisfied_outlined,
-              ),
-            ],
-          ),
+          if (_visibleCards(currentRecord).isNotEmpty)
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: AppSpacing.sm,
+              mainAxisSpacing: AppSpacing.sm,
+              childAspectRatio: 1.45,
+              children: _visibleCards(currentRecord),
+            ),
           const SizedBox(height: AppSpacing.md),
           PrimaryButton(
             label: '+ \uC624\uB298 \uAC74\uAC15 \uAE30\uB85D',
@@ -315,6 +295,60 @@ class _HealthSection extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  List<Widget> _visibleCards(HealthRecord record) {
+    final visibility = visibilityService;
+    return [
+      if (visibility?.weightVisible ?? true)
+        HealthSummaryCard(
+          key: const Key('home-weight-card'),
+          title: '\uCCB4\uC911',
+          value: _doubleText(record.weight),
+          unit: record.weight == null ? null : 'kg',
+          icon: Icons.monitor_weight_outlined,
+        ),
+      if (visibility?.bloodPressureVisible ?? true)
+        HealthSummaryCard(
+          key: const Key('home-blood-pressure-card'),
+          title: '\uD608\uC555',
+          value: _bloodPressureText(record),
+          unit: record.systolicBloodPressure == null ? null : 'mmHg',
+          icon: Icons.favorite_outline,
+        ),
+      if (visibility?.waterIntakeVisible ?? true)
+        HealthSummaryCard(
+          key: const Key('home-water-card'),
+          title: '\uC218\uBD84',
+          value: _intText(record.waterIntake),
+          unit: record.waterIntake == null ? null : 'mL',
+          icon: Icons.water_drop_outlined,
+        ),
+      if (visibility?.stepsVisible ?? true)
+        HealthSummaryCard(
+          key: const Key('home-steps-card'),
+          title: '\uC6B4\uB3D9',
+          value: _intText(record.steps),
+          unit: record.steps == null ? null : '\uAC78\uC74C',
+          icon: Icons.directions_walk_outlined,
+        ),
+      if (visibility?.sleepHoursVisible ?? true)
+        HealthSummaryCard(
+          key: const Key('home-sleep-card'),
+          title: '\uC218\uBA74',
+          value: record.sleepHours == null
+              ? '\uAE30\uB85D \uC5C6\uC74C'
+              : '${_formatDouble(record.sleepHours!)}\uC2DC\uAC04',
+          icon: Icons.bedtime_outlined,
+        ),
+      if (visibility?.conditionVisible ?? true)
+        HealthSummaryCard(
+          key: const Key('home-condition-card'),
+          title: '\uCEE8\uB514\uC158',
+          value: record.condition?.label ?? '\uAE30\uB85D \uC5C6\uC74C',
+          icon: Icons.sentiment_satisfied_outlined,
+        ),
+    ];
   }
 
   String _doubleText(double? value) =>

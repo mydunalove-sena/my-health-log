@@ -8,6 +8,7 @@ import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/health_record.dart';
 import '../../models/lab_result.dart';
+import '../../services/health_field_visibility_service.dart';
 import '../../services/health_record_service.dart';
 import '../../services/lab_result_service.dart';
 
@@ -18,12 +19,14 @@ class StatisticsScreen extends StatefulWidget {
     super.key,
     required this.healthRecordService,
     required this.labResultService,
+    this.healthFieldVisibilityService,
     this.onOpenHealth,
     this.onOpenLab,
   });
 
   final HealthRecordService healthRecordService;
   final LabResultService labResultService;
+  final HealthFieldVisibilityService? healthFieldVisibilityService;
   final VoidCallback? onOpenHealth;
   final VoidCallback? onOpenLab;
 
@@ -41,8 +44,14 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       animation: Listenable.merge([
         widget.healthRecordService,
         widget.labResultService,
+        if (widget.healthFieldVisibilityService != null)
+          widget.healthFieldVisibilityService!,
       ]),
       builder: (context, _) {
+        final tabs = _visibleTabs();
+        final selectedTab = tabs.contains(_selectedTab)
+            ? _selectedTab
+            : tabs.first;
         return Scaffold(
           appBar: AppBar(title: const Text('\uD1B5\uACC4')),
           body: SafeArea(
@@ -50,7 +59,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               padding: const EdgeInsets.all(AppSpacing.md),
               children: [
                 _StatsTabs(
-                  selectedTab: _selectedTab,
+                  tabs: tabs,
+                  selectedTab: selectedTab,
                   onSelected: (tab) {
                     setState(() {
                       _selectedTab = tab;
@@ -58,7 +68,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   },
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                _buildSelectedTab(),
+                _buildSelectedTab(selectedTab),
               ],
             ),
           ),
@@ -67,8 +77,17 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     );
   }
 
-  Widget _buildSelectedTab() {
-    return switch (_selectedTab) {
+  List<_StatsTab> _visibleTabs() {
+    final visibility = widget.healthFieldVisibilityService;
+    return [
+      if (visibility?.weightVisible ?? true) _StatsTab.weight,
+      if (visibility?.bloodPressureVisible ?? true) _StatsTab.bloodPressure,
+      _StatsTab.lab,
+    ];
+  }
+
+  Widget _buildSelectedTab(_StatsTab selectedTab) {
+    return switch (selectedTab) {
       _StatsTab.weight => _WeightStatsView(
         records: widget.healthRecordService.records,
         onOpenHealth: widget.onOpenHealth,
@@ -92,8 +111,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 }
 
 class _StatsTabs extends StatelessWidget {
-  const _StatsTabs({required this.selectedTab, required this.onSelected});
+  const _StatsTabs({
+    required this.tabs,
+    required this.selectedTab,
+    required this.onSelected,
+  });
 
+  final List<_StatsTab> tabs;
   final _StatsTab selectedTab;
   final ValueChanged<_StatsTab> onSelected;
 
@@ -101,25 +125,24 @@ class _StatsTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _StatsTabChip(
-          label: '\uCCB4\uC911',
-          selected: selectedTab == _StatsTab.weight,
-          onSelected: () => onSelected(_StatsTab.weight),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        _StatsTabChip(
-          label: '\uD608\uC555',
-          selected: selectedTab == _StatsTab.bloodPressure,
-          onSelected: () => onSelected(_StatsTab.bloodPressure),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        _StatsTabChip(
-          label: '\uAC80\uC0AC',
-          selected: selectedTab == _StatsTab.lab,
-          onSelected: () => onSelected(_StatsTab.lab),
-        ),
+        for (var index = 0; index < tabs.length; index += 1) ...[
+          if (index > 0) const SizedBox(width: AppSpacing.xs),
+          _StatsTabChip(
+            label: _labelFor(tabs[index]),
+            selected: selectedTab == tabs[index],
+            onSelected: () => onSelected(tabs[index]),
+          ),
+        ],
       ],
     );
+  }
+
+  String _labelFor(_StatsTab tab) {
+    return switch (tab) {
+      _StatsTab.weight => '\uCCB4\uC911',
+      _StatsTab.bloodPressure => '\uD608\uC555',
+      _StatsTab.lab => '\uAC80\uC0AC',
+    };
   }
 }
 

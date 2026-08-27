@@ -267,6 +267,47 @@ adb shell pm uninstall --user 95 com.example.my_health_log
 
 V2 상세 문서는 `docs/v2/`에서 확인할 수 있습니다.
 
+## V3 Current Status
+
+V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 필요한 복약, 증상, 건강기록 설정을 확장한 버전입니다.
+
+### V3 주요 변경
+
+- 미래 날짜 HealthRecord / LabResult 입력 차단
+- 정기약 / PRN 복용약 구분
+- 소수 복용량과 `정`, `mg`, `ml` 단위 입력
+- 약 용량 변경 이력
+- 정기 복용 기록의 당시 용량 snapshot 보존
+- 증상 기록과 4단계 severity
+- PRN 복용 기록과 관련 증상 연결
+- backupVersion 4 기반 증상 정의, 증상 기록, PRN 증상 연결 백업/복원
+- 건강기록 항목 표시/숨김
+- 수분 입력 선택화
+- 사용자 증상 추가 및 사용자 증상 이름 수정
+
+### V3 범위 제한
+
+- 기본 증상 이름 수정 없음
+- 사용자 증상 삭제 없음
+- 사용자 정의 건강 항목 없음
+- 증상/약 효과 분석 없음
+- 고급 증상/PRN 통계 없음
+- Cloud Sync, server sync, 계정 동기화 없음
+- 의료적 정상/위험 판정 또는 복용량 추천 없음
+
+### V3 최종 검증 상태
+
+| Item | Result |
+| --- | --- |
+| `flutter analyze` | PASS: No issues found |
+| `flutter test` | PASS: 169/169 |
+| Android V3 전체 Regression | PASS |
+| Release APK build | PASS |
+| databaseVersion | 7 |
+| backupVersion | 4 |
+
+V3 상세 요구사항, 테스트 케이스, 변경 이력은 `docs/v3/`에서 확인할 수 있습니다.
+
 ## Final V2 QA Status
 
 최종 V2 공개 기준본은 실제 확인된 결과만 기록합니다.
@@ -291,11 +332,20 @@ V2 상세 문서는 `docs/v2/`에서 확인할 수 있습니다.
 
 ## Release
 
-- Current Version: `2.0.0+3`
-- Current Release Type: Public V2 Release
-- Current Release APK: GitHub Release asset for tag `v2.0.0`
-- Current Release Notes: `release/v2.0.0/RELEASE_NOTES.md`
-- Current SHA256: `release/v2.0.0/SHA256.txt`
+- Current App Version: `2.0.0+3`
+- Current Code State: V3 local release candidate from branch `v3`
+- Current Release Type: Local V3 Release APK
+- Current Release APK: Local release artifact outside repository, `MyHealthLog_V3_Release_20260827.apk`
+- Current Release APK Size: `54,099,257 bytes`
+- Current SHA256: `0A4E1DE8399776889727921663B047D828370131735D49E620F0CEBBB7FB744D`
+
+Latest public GitHub release remains V2:
+
+- V2 Version: `2.0.0+3`
+- V2 Release Type: Public V2 Release
+- V2 Release APK: GitHub Release asset for tag `v2.0.0`
+- V2 Release Notes: `release/v2.0.0/RELEASE_NOTES.md`
+- V2 SHA256: `release/v2.0.0/SHA256.txt`
 
 V1 baseline artifact remains available:
 
@@ -308,7 +358,7 @@ APK binary files are not tracked in the source repository. Public APK downloads 
 
 ## 개인정보 및 의료 기능 범위
 
-V1은 사용자가 직접 입력한 건강 정보를 Local SQLite DB에 기록하는 개인 기록 앱입니다.
+My Health Log는 사용자가 직접 입력한 건강 정보를 Local SQLite DB에 기록하는 개인 기록 앱입니다.
 
 포함하지 않은 범위:
 

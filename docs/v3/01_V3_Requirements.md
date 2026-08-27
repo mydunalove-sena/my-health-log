@@ -23,6 +23,7 @@ V3 improves medication management and symptom logging based on real usage while 
 - Preserve medication dose-change history.
 - Preserve the dose meaning of historical scheduled medication logs.
 - Add symptom recording.
+- Include symptom data in backup/restore.
 - Add automated tests for V3 changes.
 - Run full V2 regression.
 
@@ -107,11 +108,89 @@ Applies to HealthRecord and LabResult.
 - SYM-09: The symptom record table remains independent so P0-5 can add a separate linkage structure later.
 - SYM-10: P0-4 uses only built-in default symptoms. User symptom add/edit remains P1.
 - DB-06: Database version increases from 5 to 6 for symptom definitions and symptom records.
-- BACKUP-07: Symptom backup/restore is not implemented in P0-4 and remains deferred to P0-6.
+- BACKUP-07: Symptom backup/restore remains deferred to P0-6.
 
-## Deferred After P0-4
+## V3-SYM-P05: PRN Symptom Links
 
-- Symptom-to-PRN linkage.
-- Symptom backup/restore.
+- PRN-SYM-01: When recording a PRN medication dose, the user can optionally select related symptoms.
+- PRN-SYM-02: Selecting no symptoms is allowed and preserves the existing PRN log behavior.
+- PRN-SYM-03: Selecting multiple symptoms for one PRN log is allowed.
+- PRN-SYM-04: PRN symptom relationships are stored in a separate `prn_symptom_links` table.
+- PRN-SYM-05: `prn_symptom_links` stores `prnMedicationLogId`, `symptomDefinitionId`, and `createdAt`.
+- PRN-SYM-06: Duplicate `prnMedicationLogId + symptomDefinitionId` relationships are forbidden.
+- PRN-SYM-07: A PRN symptom link is a neutral related-record link, not a cause relationship.
+- PRN-SYM-08: A PRN symptom link is not an effect, improvement, or worsening relationship.
+- PRN-SYM-09: The app must not diagnose, classify risk, infer causality, or recommend medication changes from PRN symptom links.
+- PRN-SYM-10: PRN logs and `symptom_records` remain independent.
+- PRN-SYM-11: Selecting symptoms from the PRN screen must not create, update, or delete `symptom_records`.
+- PRN-SYM-12: Symptom severity remains independent and is not selected or changed from the PRN screen.
+- PRN-SYM-13: Active symptom definitions from P0-4 are the only selectable symptoms.
+- PRN-SYM-14: Deleting a PRN log must also delete its `prn_symptom_links`.
+- PRN-SYM-15: Existing PRN logs without links remain readable and display normally.
+- DB-07: Database version increases from 6 to 7 for `prn_symptom_links`.
+- BACKUP-08: PRN symptom link backup/restore remains deferred to P0-6.
+
+## V3-SYM-P06: Symptom Backup / Restore
+
+- BACKUP-09: P0-6 backup version is 4.
+- BACKUP-10: Backup version 4 includes `symptom_definitions`.
+- BACKUP-11: Backup version 4 includes `symptom_records`.
+- BACKUP-12: Backup version 4 includes `prn_symptom_links`.
+- BACKUP-13: Restore replaces existing symptom definitions, symptom records, and PRN symptom links with the backup snapshot.
+- BACKUP-14: Backup versions 1, 2, and 3 remain accepted.
+- BACKUP-15: Older backups without symptom collections restore with empty symptom definitions, symptom records, and PRN symptom links.
+- DB-08: P0-6 does not change the existing database schema or database version.
+
+## V3-HEALTH-P1-1: Health Field Visibility
+
+- HEALTH-VIS-01: A user can show or hide the following health-record fields: weight, blood pressure, water, exercise, sleep, and condition.
+- HEALTH-VIS-02: Date is not a hideable field.
+- HEALTH-VIS-03: Hidden fields are removed from the visible UI only; hiding a field does not delete existing `HealthRecord` data.
+- HEALTH-VIS-04: Showing a hidden field again displays the existing stored value.
+- HEALTH-VIS-05: Editing and saving a health record while fields are hidden must preserve the hidden field values.
+- HEALTH-VIS-06: Visibility settings are stored with `SharedPreferences` through `HealthFieldVisibilityService`.
+- HEALTH-VIS-07: Default visibility is all-visible.
+- HEALTH-VIS-08: Visibility settings persist after app restart.
+- HEALTH-VIS-09: Home today's health card respects the visibility settings.
+- HEALTH-VIS-10: Health record list respects the visibility settings.
+- HEALTH-VIS-11: Health record add/edit screen respects the visibility settings.
+- HEALTH-VIS-12: Statistics respects the visibility settings: hiding weight hides the weight tab, hiding blood pressure hides the blood pressure tab, and the lab tab remains available.
+- DB-09: P1-1 does not change `HealthRecord`, the `health_records` schema, or the database version.
+- BACKUP-16: P1-1 visibility settings are not included in backup, do not change `BackupService`, and do not change backupVersion 4.
+
+## V3-HEALTH-P1-2: Optional Water Input
+
+- HEALTH-WATER-01: Water intake is optional in the visible health-record UI.
+- HEALTH-WATER-02: When the water field is visible and left blank, `waterIntake` is saved as `null`.
+- HEALTH-WATER-03: When the water field is visible and a positive integer is entered, that value is saved as `waterIntake`.
+- HEALTH-WATER-04: When an existing record has a water value and the user clears the visible water field before saving, the value is explicitly removed and `waterIntake` is saved as `null`.
+- HEALTH-WATER-05: `0` is invalid for water intake and is not treated as the same state as `null`.
+- HEALTH-WATER-06: When water is hidden through P1-1 visibility settings, editing and saving the record preserves the existing `waterIntake` value.
+- HEALTH-WATER-07: P1-2 does not add a separate water toggle, checkbox, water-specific setting, or "not recorded" state.
+- HEALTH-WATER-08: P1-2 does not add water statistics and does not change the Home display policy.
+- DB-10: P1-2 does not change `HealthRecord`, the `health_records` schema, or the database version.
+- BACKUP-17: P1-2 does not change `BackupService`, backup payload shape, or backupVersion 4.
+
+## V3-SYM-P1-3: User Symptom Add/Edit
+
+- SYM-USER-01: A user can add a new active symptom definition.
+- SYM-USER-02: Added user symptom definitions are stored with `isDefault = false` and `isActive = true`.
+- SYM-USER-03: A user can rename only user-added symptom definitions where `isDefault = false`.
+- SYM-USER-04: Built-in default symptoms where `isDefault = true` cannot be renamed.
+- SYM-USER-05: Built-in default symptoms remain `두통`, `피로`, `메스꺼움`, and `어지러움`.
+- SYM-USER-06: P1-3 does not add symptom delete, deactivate, reorder, icon, color, category, statistics, severity changes, or PRN effect/cause analysis.
+- SYM-USER-07: Symptom names are trimmed before saving.
+- SYM-USER-08: Blank or whitespace-only symptom names are rejected.
+- SYM-USER-09: A symptom name that exactly matches another active symptom definition is rejected.
+- SYM-USER-10: Renaming a symptom to its own current name is allowed.
+- SYM-USER-11: P1-3 does not add arbitrary name length limits or case-insensitive duplicate matching.
+- SYM-USER-12: Renaming a user symptom preserves the existing symptom definition id.
+- SYM-USER-13: Existing `symptom_records` keep their existing `symptomDefinitionId` and severity after rename.
+- SYM-USER-14: Existing `prn_symptom_links` keep their existing `symptomDefinitionId` after rename.
+- SYM-USER-15: After rename, existing symptom records and existing PRN links display the new symptom definition name.
+- DB-11: P1-3 does not change the `symptom_definitions`, `symptom_records`, or `prn_symptom_links` schema and does not change the database version.
+- BACKUP-18: P1-3 does not change `BackupService`, backup payload shape, restore semantics, or backupVersion 4.
+
+## Deferred After P1-3
+
 - Advanced PRN/symptom statistics.
-- Health-field visibility settings.

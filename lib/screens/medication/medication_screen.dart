@@ -5,19 +5,29 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/medication.dart';
+import '../../models/symptom.dart';
 import '../../services/medication_service.dart';
+import '../../services/symptom_service.dart';
 import 'medication_form_screen.dart';
 import 'prn_medication_log_form_screen.dart';
 
 class MedicationScreen extends StatelessWidget {
-  const MedicationScreen({super.key, required this.service});
+  const MedicationScreen({
+    super.key,
+    required this.service,
+    this.symptomService,
+  });
 
   final MedicationService service;
+  final SymptomService? symptomService;
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: service,
+      animation: Listenable.merge([
+        service,
+        ?symptomService,
+      ]),
       builder: (context, _) {
         final items = service.todayDoseItems;
         final prnMedications = service.activePrnMedications;
@@ -78,6 +88,8 @@ class MedicationScreen extends StatelessWidget {
                       _PrnMedicationGroup(
                         medications: prnMedications,
                         service: service,
+                        symptomDefinitions:
+                            symptomService?.definitions ?? const [],
                         onRecord: (medication) =>
                             _openPrnRecord(context, medication),
                       ),
@@ -111,6 +123,7 @@ class MedicationScreen extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => PrnMedicationLogFormScreen(
           service: service,
+          symptomService: symptomService,
           medication: medication,
         ),
       ),
@@ -301,11 +314,13 @@ class _PrnMedicationGroup extends StatelessWidget {
   const _PrnMedicationGroup({
     required this.medications,
     required this.service,
+    required this.symptomDefinitions,
     required this.onRecord,
   });
 
   final List<Medication> medications;
   final MedicationService service;
+  final List<SymptomDefinition> symptomDefinitions;
   final ValueChanged<Medication> onRecord;
 
   @override
@@ -327,6 +342,9 @@ class _PrnMedicationGroup extends StatelessWidget {
                 _PrnMedicationRow(
                   medication: medications[i],
                   logs: service.prnLogsForMedication(medications[i].id),
+                  symptomDefinitions: symptomDefinitions,
+                  symptomDefinitionIdsForLog:
+                      service.symptomDefinitionIdsForPrnLog,
                   onRecord: () => onRecord(medications[i]),
                 ),
                 if (i != medications.length - 1)
@@ -344,11 +362,16 @@ class _PrnMedicationRow extends StatelessWidget {
   const _PrnMedicationRow({
     required this.medication,
     required this.logs,
+    required this.symptomDefinitions,
+    required this.symptomDefinitionIdsForLog,
     required this.onRecord,
   });
 
   final Medication medication;
   final List<PrnMedicationLog> logs;
+  final List<SymptomDefinition> symptomDefinitions;
+  final List<String> Function(String prnMedicationLogId)
+  symptomDefinitionIdsForLog;
   final VoidCallback onRecord;
 
   @override
@@ -382,6 +405,14 @@ class _PrnMedicationRow extends StatelessWidget {
                         ?.copyWith(color: AppColors.secondaryText),
                   ),
                 ],
+                if (logs.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xxs),
+                  for (final log in logs)
+                    _PrnLogDetailItem(
+                      log: log,
+                      symptomNames: _symptomNamesForLog(log.id),
+                    ),
+                ],
               ],
             ),
           ),
@@ -391,6 +422,62 @@ class _PrnMedicationRow extends StatelessWidget {
             child: const Text('복용 기록'),
           ),
         ],
+      ),
+    );
+  }
+
+  List<String> _symptomNamesForLog(String prnMedicationLogId) {
+    final ids = symptomDefinitionIdsForLog(prnMedicationLogId).toSet();
+    return [
+      for (final definition in symptomDefinitions)
+        if (ids.contains(definition.id)) definition.name,
+    ];
+  }
+}
+
+class _PrnLogDetailItem extends StatelessWidget {
+  const _PrnLogDetailItem({required this.log, required this.symptomNames});
+
+  final PrnMedicationLog log;
+  final List<String> symptomNames;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: ValueKey('prn-log-entry-${log.id}'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.xxs),
+          child: Text(
+            _formatTime(log.takenAt),
+            key: ValueKey('prn-log-time-${log.id}'),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: AppColors.secondaryText),
+          ),
+        ),
+        if (symptomNames.isNotEmpty)
+          _PrnLogDetailLine(log: log, symptomNames: symptomNames),
+      ],
+    );
+  }
+}
+
+class _PrnLogDetailLine extends StatelessWidget {
+  const _PrnLogDetailLine({required this.log, required this.symptomNames});
+
+  final PrnMedicationLog log;
+  final List<String> symptomNames;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xxs),
+      child: Text(
+        '관련 증상: ${symptomNames.join(' · ')}',
+        key: ValueKey('prn-log-detail-${log.id}'),
+        style: Theme.of(context).textTheme.bodySmall
+            ?.copyWith(color: AppColors.secondaryText),
       ),
     );
   }

@@ -5,6 +5,7 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/symptom.dart';
 import '../../services/symptom_service.dart';
+import 'symptom_management_screen.dart';
 
 class SymptomRecordScreen extends StatefulWidget {
   const SymptomRecordScreen({super.key, required this.service});
@@ -35,7 +36,17 @@ class _SymptomRecordScreenState extends State<SymptomRecordScreen> {
       builder: (context, _) {
         _ensureSelections();
         return Scaffold(
-          appBar: AppBar(title: const Text('증상 기록')),
+          appBar: AppBar(
+            title: const Text('증상 기록'),
+            actions: [
+              IconButton(
+                key: const Key('symptom-management-button'),
+                tooltip: '증상 관리',
+                icon: const Icon(Icons.manage_search_outlined),
+                onPressed: _openSymptomManagement,
+              ),
+            ],
+          ),
           body: SafeArea(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(
@@ -90,6 +101,14 @@ class _SymptomRecordScreenState extends State<SymptomRecordScreen> {
         _syncSelections();
       });
     }
+  }
+
+  Future<void> _openSymptomManagement() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SymptomManagementScreen(service: widget.service),
+      ),
+    );
   }
 
   Future<void> _save() async {

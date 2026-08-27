@@ -5,7 +5,7 @@ class AppDatabase {
   AppDatabase._();
 
   static const databaseName = 'my_health_log.db';
-  static const databaseVersion = 6;
+  static const databaseVersion = 7;
   static Database? _database;
 
   static Future<Database> open() async {
@@ -22,6 +22,7 @@ class AppDatabase {
         await _createMedicationTables(db);
         await _createLabResultTables(db);
         await _createSymptomTables(db);
+        await _createPrnSymptomLinks(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -38,6 +39,9 @@ class AppDatabase {
         }
         if (oldVersion < 6) {
           await _createSymptomTables(db);
+        }
+        if (oldVersion < 7) {
+          await _createPrnSymptomLinks(db);
         }
       },
     );
@@ -133,6 +137,28 @@ CREATE TABLE IF NOT EXISTS prn_medication_logs (
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_prn_medication_logs_medication '
       'ON prn_medication_logs(medicationId)',
+    );
+  }
+
+  static Future<void> _createPrnSymptomLinks(Database db) async {
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS prn_symptom_links (
+  id TEXT PRIMARY KEY,
+  prnMedicationLogId TEXT NOT NULL,
+  symptomDefinitionId TEXT NOT NULL,
+  createdAt TEXT NOT NULL,
+  FOREIGN KEY (prnMedicationLogId) REFERENCES prn_medication_logs(id),
+  FOREIGN KEY (symptomDefinitionId) REFERENCES symptom_definitions(id),
+  UNIQUE (prnMedicationLogId, symptomDefinitionId)
+)
+''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_prn_symptom_links_log '
+      'ON prn_symptom_links(prnMedicationLogId)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_prn_symptom_links_symptom '
+      'ON prn_symptom_links(symptomDefinitionId)',
     );
   }
 
