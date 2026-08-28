@@ -248,6 +248,21 @@ P1-3 did not change backup/restore production code. Android backup/restore was n
 | V3-HF-MED-TC-14 | PRN history | Multiple PRN logs exist on the same date | Each PRN log is shown separately |
 | V3-HF-MED-TC-15 | Regression | Open medication history and return to today | Today's medication screen state is unchanged |
 
+### Home Today's Medication Display
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V3-HF-HOME-MED-TC-01 | Home | More than three scheduled medication items exist today | All scheduled medication items are displayed |
+| V3-HF-HOME-MED-TC-02 | Home grouping | Scheduled medications exist across morning, lunch, evening, and bedtime | Groups are shown in morning -> lunch -> evening -> bedtime order |
+| V3-HF-HOME-MED-TC-03 | Home grouping | A time slot has no scheduled medication | The empty time-slot group is hidden |
+| V3-HF-HOME-MED-TC-04 | Home rows | View grouped scheduled medication rows | Row keeps medication name, dose, taken/not-taken state, and status icon without repeating the time-slot label |
+| V3-HF-HOME-MED-TC-05 | Home dose | Completed scheduled dose has a snapshot | Historical dose snapshot is displayed |
+| V3-HF-HOME-MED-TC-06 | Home dose | Untaken scheduled dose exists | Current medication dose is displayed |
+| V3-HF-HOME-MED-TC-07 | Home scroll | Many scheduled medication items exist | Existing Home scroll allows access through the final medication |
+| V3-HF-HOME-MED-TC-08 | Home action | Many scheduled medication groups are displayed | Medication confirmation button remains reachable after all groups |
+| V3-HF-HOME-MED-TC-09 | PRN scope | PRN medication exists | PRN medication is not newly displayed on Home |
+| V3-HF-HOME-MED-TC-10 | Compatibility scope | Home scheduled-medication display changes are used | DB/model/service/Backup behavior remains unchanged |
+
 ### Statistics Date Display
 
 | ID | Area | Scenario | Expected |
@@ -259,11 +274,13 @@ P1-3 did not change backup/restore production code. Android backup/restore was n
 ### V3.0.1 Automated QA
 
 - `flutter analyze`: PASS, No issues found.
+- Home/widget focused tests, `flutter test test/widget_test.dart`: 19 PASS, 0 FAIL.
+- Medication snapshot display focused tests, `flutter test test/medication_snapshot_display_test.dart`: 3 PASS, 0 FAIL.
 - Lab focused tests, `flutter test test/lab_result_test.dart`: 18 PASS, 0 FAIL.
 - Medication History focused tests, `flutter test test/medication_history_test.dart`: 7 PASS, 0 FAIL.
 - Statistics focused tests, `flutter test test/statistics_test.dart`: 27 PASS, 0 FAIL.
 - Medication/PRN/Snapshot/Backup regression bundle: 71 PASS, 0 FAIL.
-- Full regression, `flutter test`: 183 PASS, 0 FAIL.
+- Full regression, `flutter test`: 185 PASS, 0 FAIL.
 - During test stabilization, the Lab DatePicker widget helper initially selected a day without pressing OK/confirmation. This was a test automation issue, not a production app functional bug. After the helper fix, lab focused tests passed 18/18.
 
 ### V3.0.1 Android Device QA
@@ -314,6 +331,20 @@ This check is recorded separately from the strengthened device QA count above. T
 | QA-STAT-DATE-01 | Weight statistics list date displays on one line | PASS |
 | QA-STAT-DATE-02 | Blood pressure statistics list date displays on one line | PASS |
 | QA-STAT-DATE-03 | Lab statistics list date displays on one line | PASS |
+
+### V3.0.1 Additional Android Home Medication Check
+
+This check is recorded separately from the strengthened device QA count above. The strengthened device QA result remains 20 PASS, 0 FAIL, 8 BLOCKED.
+
+- Device: SM-S918N, Android 16.
+
+| ID | Scenario | Result |
+|---|---|---|
+| QA-HOME-MED-01 | More than three scheduled medication items are displayed on Home | PASS |
+| QA-HOME-MED-02 | Morning, lunch, evening, and bedtime groups display correctly | PASS |
+| QA-HOME-MED-03 | Empty time-slot groups are hidden | PASS |
+| QA-HOME-MED-04 | Home scroll reaches the final medication | PASS |
+| QA-HOME-MED-05 | Medication confirmation button remains reachable | PASS |
 
 ## Regression
 

@@ -502,7 +502,7 @@ Release APK generation passed for the verified V3 code state.
 
 ### Requirement
 
-V3.0.1 addresses immediate V3.0.0 real-use friction without expanding into V3.1.0 scope. The hot fix makes lab-result edit/delete actions visible, improves same-date lab entry after saving, adds read-only medication history lookup for stored scheduled and PRN logs, and fixes statistics list date wrapping on real Android devices.
+V3.0.1 addresses immediate V3.0.0 real-use friction without expanding into V3.1.0 scope. The hot fix makes lab-result edit/delete actions visible, improves same-date lab entry after saving, adds read-only medication history lookup for stored scheduled and PRN logs, improves Home today's scheduled-medication display, and fixes statistics list date wrapping on real Android devices.
 
 ### Implementation
 
@@ -525,6 +525,17 @@ V3.0.1 addresses immediate V3.0.0 real-use friction without expanding into V3.1.
 - PRN related symptoms are resolved through existing `prn_symptom_links` and shown neutrally.
 - No past medication edit/delete workflow was added.
 - No medical causality, effect, risk, diagnosis, or medication-advice interpretation was added.
+- Home today's medication display no longer limits scheduled medication rows to three items.
+- Home today's scheduled medications are grouped by morning, lunch, evening, and bedtime.
+- Empty Home medication time-slot groups are hidden.
+- Home medication rows no longer repeat the time-slot label because the group header already provides it.
+- Home medication rows keep medication name, dose, taken/not-taken state, and status icon.
+- Home completed scheduled doses continue to display historical dose snapshots.
+- Home untaken scheduled doses continue to display the current medication dose.
+- Home keeps the existing `SingleChildScrollView` so all scheduled medication groups remain reachable when many medications exist.
+- The Home medication confirmation button remains after the full grouped medication list.
+- PRN medications were not newly displayed on Home.
+- No DB, model, service, or Backup change was made for the Home medication display improvement.
 - Statistics value-list dates now keep the existing `MM.dd` format on one line.
 - The shared `_ValueRow` date display fix applies to weight, blood pressure, and lab statistics lists.
 - Statistics chart and x-axis date rendering were not changed.
@@ -541,11 +552,13 @@ V3.0.1 addresses immediate V3.0.0 real-use friction without expanding into V3.1.
 ### Automated QA
 
 - `flutter analyze`: PASS, No issues found.
+- Home/widget focused tests, `flutter test test/widget_test.dart`: 19 PASS, 0 FAIL.
+- Medication snapshot display focused tests, `flutter test test/medication_snapshot_display_test.dart`: 3 PASS, 0 FAIL.
 - Lab focused tests, `flutter test test/lab_result_test.dart`: 18 PASS, 0 FAIL.
 - Medication History focused tests, `flutter test test/medication_history_test.dart`: 7 PASS, 0 FAIL.
 - Statistics focused tests, `flutter test test/statistics_test.dart`: 27 PASS, 0 FAIL.
 - Medication/PRN/Snapshot/Backup regression bundle: 71 PASS, 0 FAIL.
-- Full regression, `flutter test`: 183 PASS, 0 FAIL.
+- Full regression, `flutter test`: 185 PASS, 0 FAIL.
 - A Lab DatePicker widget-test helper initially failed because it selected the day but did not press OK/confirmation. This was a test automation issue, not a production app bug. After the helper was fixed, the lab focused suite passed 18/18.
 
 ### Android Device QA
@@ -565,6 +578,17 @@ V3.0.1 addresses immediate V3.0.0 real-use friction without expanding into V3.1.
 - Pre-QA DB snapshot passed.
 - Post-QA DB restore passed.
 - QA301 test data residual check passed; no QA301 data remained after restore.
+
+### Additional Android Home Medication Check
+
+This was a separate real-device confirmation after the strengthened device QA above. The strengthened device QA count remains 20 PASS, 0 FAIL, 8 BLOCKED.
+
+- Device: SM-S918N, Android 16.
+- More than three scheduled medication items displayed on Home: PASS.
+- Morning, lunch, evening, and bedtime groups displayed correctly: PASS.
+- Empty time-slot groups were hidden: PASS.
+- Home scrolling reached the final medication: PASS.
+- Medication confirmation button remained reachable: PASS.
 
 ### Additional Android Statistics Check
 

@@ -4,7 +4,7 @@
 
 V3 improves medication management and symptom logging based on real usage while preserving the V2 baseline and existing user data.
 
-V3.0.1 is a HOT FIX after the V3.0.0 release. It addresses immediate real-use friction in lab-result CRUD, medication-history lookup, and statistics list date display without changing the database schema, backup payload, or V3.0.0 data compatibility.
+V3.0.1 is a HOT FIX after the V3.0.0 release. It addresses immediate real-use friction in lab-result CRUD, medication-history lookup, Home today's scheduled-medication display, and statistics list date display without changing the database schema, backup payload, or V3.0.0 data compatibility.
 
 ## Fixed Principles
 
@@ -197,7 +197,7 @@ Applies to HealthRecord and LabResult.
 
 - Advanced PRN/symptom statistics.
 
-## V3.0.1 HOT FIX: Lab CRUD UX / Medication History / Statistics Date Display
+## V3.0.1 HOT FIX: Lab CRUD UX / Medication History / Home Medication Display / Statistics Date Display
 
 ### Scope
 
@@ -234,6 +234,20 @@ Applies to HealthRecord and LabResult.
 - V301-MED-14: PRN logs without related symptoms must still display normally.
 - V301-MED-15: Multiple PRN logs on the same date must display as separate history entries.
 - V301-MED-16: Related symptoms must be presented neutrally; the app must not infer cause, effect, improvement, worsening, diagnosis, risk, or medication advice.
+
+### Home Today's Medication Display
+
+- V301-HOME-MED-01: Home must display all scheduled medication items for today instead of limiting the preview to three items.
+- V301-HOME-MED-02: Today's scheduled medication items must be grouped by time slot in this order: morning, lunch, evening, bedtime.
+- V301-HOME-MED-03: Empty time-slot groups must be hidden.
+- V301-HOME-MED-04: Because the group header shows the time slot, each medication row must not repeat the same time-slot label.
+- V301-HOME-MED-05: Medication rows must keep medication name, dose, taken/not-taken state, and status icon.
+- V301-HOME-MED-06: A completed scheduled dose must keep displaying the historical dose snapshot.
+- V301-HOME-MED-07: An untaken scheduled dose must keep displaying the current medication dose.
+- V301-HOME-MED-08: Home must keep using the existing `SingleChildScrollView` so all medication groups remain reachable when many medications are scheduled.
+- V301-HOME-MED-09: The medication confirmation button remains after all medication groups.
+- V301-HOME-MED-10: V3.0.1 must not newly display PRN medications on Home.
+- V301-HOME-MED-11: V3.0.1 Home display changes must not change DB, model, service, or backup behavior.
 
 ### Statistics Date Display
 
