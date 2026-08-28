@@ -32,12 +32,20 @@ QA 관점에서는 요구사항과 실제 구현 결과의 연결, CRUD 동작, 
 - 체중 기록
 - 혈압 기록
 - 수분 기록
-- 운동 기록
 - 수면 기록
 - 컨디션 선택
 - Add / Edit / Delete
 - 날짜별 1개 Record 제한
 - Local SQLite Persistence
+
+### Exercise Record
+
+- HealthRecord `steps`와 분리된 독립 운동 기록
+- 하루 여러 운동 기록
+- 운동 종류 / 운동 시간 / 강도 3단계 기록
+- 운동 날짜의 체중 `weightSnapshot` 저장
+- MET snapshot 기반 예상 소모 칼로리 표시
+- 과거 운동 기록 조회 / 수정 / 삭제
 
 ### Medication
 
@@ -269,7 +277,7 @@ V2 상세 문서는 `docs/v2/`에서 확인할 수 있습니다.
 
 ## V3 Current Status
 
-V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 필요한 복약, 증상, 건강기록 설정을 확장한 버전입니다.
+V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 필요한 복약, 증상, 건강기록 설정, 운동 기록을 확장한 버전입니다.
 
 ### V3 주요 변경
 
@@ -284,6 +292,11 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 - 건강기록 항목 표시/숨김
 - 수분 입력 선택화
 - 사용자 증상 추가 및 사용자 증상 이름 수정
+- V3.1.0 운동 기록 독립 구조
+- 하루 여러 운동, 운동 종류, 운동 시간, 강도 3단계 기록
+- 운동 날짜 체중 snapshot과 MET snapshot 기반 예상 소모 칼로리
+- 운동 기록 과거 조회, 수정, 삭제
+- backupVersion 5 기반 운동 기록 백업/복원
 
 ### V3 범위 제한
 
@@ -292,19 +305,34 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 - 사용자 정의 건강 항목 없음
 - 증상/약 효과 분석 없음
 - 고급 증상/PRN 통계 없음
+- GPS, 거리, 고도, 심박수 기록 없음
+- Samsung Health / Google Fit 연동 없음
+- 운동 자동 감지, 운동 목표, 운동 고급 통계 없음
+- 사용자 정의 운동 종류 CRUD 없음
 - Cloud Sync, server sync, 계정 동기화 없음
 - 의료적 정상/위험 판정 또는 복용량 추천 없음
+
+### V3.1.0 Exercise Record Policy
+
+- 기존 `HealthRecord.steps`와 `health_records.steps` 컬럼은 legacy compatibility 용도로 보존합니다.
+- 신규 건강기록 화면에서는 steps 입력 UI를 제거했으며, 홈에서 steps를 운동 기록처럼 표시하지 않습니다.
+- 기존 steps 데이터는 `ExerciseRecord`로 자동 변환하지 않습니다.
+- 기존 건강기록 수정 시 저장되어 있던 steps 값은 손실되지 않도록 보존합니다.
+- 운동 예상 소모 칼로리는 `metSnapshot * weightSnapshot * durationMinutes / 60` 기준이며, 당일 체중 기록이 없으면 계산 불가로 표시합니다.
+- 실제 Android 기기 QA에서는 사용자 데이터 보호를 위해 전체 DB Restore round-trip을 실행하지 않았고, Backup V5 생성과 JSON serialization/deserialization round-trip을 검증했습니다.
 
 ### V3 최종 검증 상태
 
 | Item | Result |
 | --- | --- |
 | `flutter analyze` | PASS: No issues found |
-| `flutter test` | PASS: 169/169 |
-| Android V3 전체 Regression | PASS |
+| `flutter test` | PASS: 200/200 |
+| Focused V3.1.0 tests | PASS: 73/73 |
+| Android V3.1.0 automated QA | PASS: confirmed app functional failures 0 |
 | Release APK build | PASS |
-| databaseVersion | 7 |
-| backupVersion | 4 |
+| Release APK SHA-256 | `95704F75F9FF9F90767B3F5B1F82E877ACE1829E3D8F653361CAE3FFB15768CF` |
+| databaseVersion | 8 |
+| backupVersion | 5 |
 
 V3 상세 요구사항, 테스트 케이스, 변경 이력은 `docs/v3/`에서 확인할 수 있습니다.
 
@@ -333,11 +361,11 @@ V3 상세 요구사항, 테스트 케이스, 변경 이력은 `docs/v3/`에서 �
 ## Release
 
 - Current App Version: `3.0.0+4`
-- Current Code State: V3 local release candidate from branch `v3`
-- Current Release Type: Local V3 Release APK
-- Current Release APK: Local release artifact outside repository, `MyHealthLog_V3_Release_20260827.apk`
-- Current Release APK Size: `54,099,257 bytes`
-- Current SHA256: `0A4E1DE8399776889727921663B047D828370131735D49E620F0CEBBB7FB744D`
+- Current Code State: V3.1.0 local release build candidate from branch `v3`
+- Current Release Type: Local V3.1.0 Release APK build verification
+- Current Release APK: `build\app\outputs\flutter-apk\app-release.apk`
+- Current Release APK Size: `54,214,009 bytes` (`51.7 MB`)
+- Current SHA256: `95704F75F9FF9F90767B3F5B1F82E877ACE1829E3D8F653361CAE3FFB15768CF`
 
 Latest public GitHub release remains V2:
 

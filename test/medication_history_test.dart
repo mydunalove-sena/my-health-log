@@ -290,9 +290,9 @@ void main() {
     });
   });
 
-  test('V3.0.1 compatibility versions stay unchanged', () {
-    expect(AppDatabase.databaseVersion, 7);
-    expect(BackupDocument.backupVersion, 4);
+  test('V3.1.0 compatibility versions include exercise records', () {
+    expect(AppDatabase.databaseVersion, 8);
+    expect(BackupDocument.backupVersion, 5);
   });
 }
 

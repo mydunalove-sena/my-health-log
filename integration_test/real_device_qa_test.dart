@@ -10,6 +10,7 @@ import 'package:my_health_log/screens/home/home_screen.dart';
 import 'package:my_health_log/screens/lab/lab_screen.dart';
 import 'package:my_health_log/screens/medication/medication_screen.dart';
 import 'package:my_health_log/screens/statistics/statistics_screen.dart';
+import 'package:my_health_log/services/exercise_service.dart';
 import 'package:my_health_log/services/health_record_service.dart';
 import 'package:my_health_log/services/lab_result_service.dart';
 import 'package:my_health_log/services/medication_service.dart';
@@ -28,11 +29,16 @@ void main() {
     final medicationService = MedicationService(SqfliteMedicationStorage());
     final labResultService = LabResultService(SqfliteLabResultStorage());
     final symptomService = SymptomService(SqfliteSymptomStorage());
+    final exerciseService = ExerciseService(
+      SqfliteExerciseRecordStorage(),
+      healthService,
+    );
     await Future.wait([
       healthService.load(),
       medicationService.load(),
       labResultService.load(),
       symptomService.load(),
+      exerciseService.load(),
     ]);
 
     final firstHealthDate = _firstUnusedHealthDate(healthService);
@@ -108,6 +114,7 @@ void main() {
       tester,
       healthService,
       symptomService,
+      exerciseService,
       firstHealthDate,
       secondHealthDate,
     );
@@ -141,11 +148,16 @@ void main() {
       SqfliteLabResultStorage(),
     );
     final reloadedSymptomService = SymptomService(SqfliteSymptomStorage());
+    final reloadedExerciseService = ExerciseService(
+      SqfliteExerciseRecordStorage(),
+      reloadedHealthService,
+    );
     await Future.wait([
       reloadedHealthService.load(),
       reloadedMedicationService.load(),
       reloadedLabResultService.load(),
       reloadedSymptomService.load(),
+      reloadedExerciseService.load(),
     ]);
 
     expect(reloadedHealthService.recordForDate(firstHealthDate)?.weight, 72.4);
@@ -172,6 +184,7 @@ void main() {
       tester,
       reloadedHealthService,
       reloadedSymptomService,
+      reloadedExerciseService,
       firstHealthDate,
       secondHealthDate,
     );
@@ -228,12 +241,17 @@ Future<void> _smokeHealth(
   WidgetTester tester,
   HealthRecordService service,
   SymptomService symptomService,
+  ExerciseService exerciseService,
   DateTime firstDate,
   DateTime secondDate,
 ) async {
   await tester.pumpWidget(
     MaterialApp(
-      home: HealthScreen(service: service, symptomService: symptomService),
+      home: HealthScreen(
+        service: service,
+        symptomService: symptomService,
+        exerciseService: exerciseService,
+      ),
     ),
   );
   await tester.pumpAndSettle();

@@ -615,3 +615,77 @@ The following items were recorded as BLOCKED, not FAIL, because protecting real 
 ### Result
 
 V3.0.1 HOT FIX passed automated regression and Android device QA with no confirmed functional failures. V3.0.1 keeps databaseVersion 7, backupVersion 4, the existing DB schema, and the existing backup payload unchanged.
+
+## 2026-08-28 - V3.1.0 Exercise Records
+
+### Requirement
+
+V3.1.0 separates exercise recording from legacy `HealthRecord.steps` so the app can record multiple exercises per day with type, duration, intensity, weight snapshot, MET snapshot, and estimated calorie information while preserving existing V3 data.
+
+### Implementation
+
+- Added independent `ExerciseRecord` data with `id`, `date`, `exerciseType`, `durationMinutes`, `intensity`, `weightSnapshot`, `metSnapshot`, `estimatedCalories`, `createdAt`, and `updatedAt`.
+- Added exercise types: walking, running, cycling, hiking, swimming, strengthTraining, stationaryBike, treadmill, elliptical, stairs, yogaStretching, and other.
+- Added intensity values light, moderate, and vigorous, displayed as `가볍게`, `보통`, and `강하게`.
+- Centralized MET values and stored selected MET as `metSnapshot`.
+- Calculated only `예상 소모 칼로리`; the app does not present exact calories or Samsung Health-equivalent values.
+- Added `exercise_records` with non-unique `date` to allow multiple exercises on the same date.
+- Increased `databaseVersion` from 7 to 8.
+- Added `ExerciseService`, SQLite storage, and in-memory storage.
+- Added exercise list and form screens with create, past lookup, edit, and delete.
+- Added Health screen entry point for exercise records without changing the five-tab bottom navigation.
+- Home now reads today's exercise from `ExerciseService` instead of treating `HealthRecord.steps` as exercise.
+- Removed steps input from the new health-record UI.
+- Preserved `HealthRecord.steps`, `health_records.steps`, `toMap/fromMap`, and existing legacy data.
+- Existing health-record edits preserve stored legacy steps even though the steps input is no longer visible.
+- No steps-to-ExerciseRecord migration was added.
+- Increased `backupVersion` from 4 to 5.
+- Backup version 5 includes `exerciseRecords`; backup versions 1 through 4 remain accepted without exercise records.
+- Legacy `healthRecords.steps` remains preserved through backup/restore.
+- Did not add GPS, distance, elevation, heart-rate capture, Samsung Health, Google Fit, exercise auto-detection, exercise goals, advanced exercise statistics, or custom exercise-type CRUD.
+
+### Snapshot Policy
+
+- New exercise creation snapshots the exercise date's `HealthRecord.weight`.
+- Exercise without same-day weight still saves with `weightSnapshot = null` and `estimatedCalories = null`.
+- Same-date exercise edits preserve the existing `weightSnapshot`.
+- Exercise date changes re-snapshot weight from the new date.
+- Later health-record weight edits do not automatically change existing exercise snapshots.
+- Type, intensity, and duration edits recalculate MET and estimated calories using the applicable snapshot policy.
+
+### Automated QA
+
+- Focused tests: 73 PASS, 0 FAIL.
+- Initial full regression: 199 PASS, 1 FAIL. The failure was a stale V3.0.1 compatibility-test assertion expecting `databaseVersion 7` and `backupVersion 4`, not an app functional defect.
+- Final full regression after updating the V3.1.0 expected values: 200 PASS, 0 FAIL.
+- `flutter analyze`: PASS, No issues found.
+- `git diff --check`: PASS, with LF -> CRLF warnings only.
+
+### Release APK
+
+- Command: `flutter build apk --release`.
+- Result: PASS.
+- APK: `build\app\outputs\flutter-apk\app-release.apk`.
+- APK size: 54,214,009 bytes, about 51.7 MB.
+- SHA-256: `95704F75F9FF9F90767B3F5B1F82E877ACE1829E3D8F653361CAE3FFB15768CF`.
+
+### Android Device QA
+
+- Device: Samsung SM-S918N, Android 16, SDK 36.
+- Exercise DB / Service passed: multiple exercises per day, weight snapshot, MET snapshot, estimated calories, no-weight date save, future-date rejection, and zero/negative duration rejection.
+- Exercise edit passed: same-date snapshot preservation, date-change snapshot regeneration, and calorie recalculation.
+- SQLite persistence passed after service/storage reload.
+- ExerciseScreen passed.
+- Health -> Exercise navigation passed.
+- Home smoke passed after follow-up test-harness correction.
+- Backup V5 serialization passed, including `exerciseRecords` presence and JSON round-trip preservation of ExerciseRecord snapshot fields.
+- QA data cleanup passed.
+- `adb install -r` passed.
+- Release launch stability passed 3/3.
+- Final logcat showed no fatal app crash.
+- Confirmed app functional failures: 0.
+- Real-device full DB Restore round-trip was not run to protect existing user data; real-device QA covered Backup V5 serialization, and automated regression covered Backup/Restore round-trip.
+
+### Result
+
+V3.1.0 exercise-record improvement passed focused tests, final full regression, static analysis, release APK build verification, and real Android device automated QA with no confirmed app functional failures. V3.1.0 uses databaseVersion 8 and backupVersion 5.

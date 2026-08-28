@@ -5,9 +5,11 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/health_record.dart';
+import '../../services/exercise_service.dart';
 import '../../services/health_field_visibility_service.dart';
 import '../../services/health_record_service.dart';
 import '../../services/symptom_service.dart';
+import '../exercise/exercise_screen.dart';
 import 'health_field_visibility_screen.dart';
 import 'health_form_screen.dart';
 import 'symptom_record_screen.dart';
@@ -17,11 +19,13 @@ class HealthScreen extends StatelessWidget {
     super.key,
     required this.service,
     required this.symptomService,
+    required this.exerciseService,
     this.healthFieldVisibilityService,
   });
 
   final HealthRecordService service;
   final SymptomService symptomService;
+  final ExerciseService exerciseService;
   final HealthFieldVisibilityService? healthFieldVisibilityService;
 
   @override
@@ -34,6 +38,14 @@ class HealthScreen extends StatelessWidget {
           appBar: AppBar(
             title: const Text('건강 기록'),
             actions: [
+              IconButton(
+                tooltip: '운동 기록',
+                icon: const Icon(
+                  Icons.fitness_center_outlined,
+                  key: Key('exercise-record-button'),
+                ),
+                onPressed: () => _openExerciseRecord(context),
+              ),
               IconButton(
                 tooltip: '\uD56D\uBAA9 \uD45C\uC2DC \uC124\uC815',
                 icon: const Icon(
@@ -127,6 +139,17 @@ class HealthScreen extends StatelessWidget {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => SymptomRecordScreen(service: symptomService),
+      ),
+    );
+  }
+
+  Future<void> _openExerciseRecord(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ExerciseScreen(
+          exerciseService: exerciseService,
+          healthRecordService: service,
+        ),
       ),
     );
   }

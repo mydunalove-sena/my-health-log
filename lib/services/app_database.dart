@@ -5,7 +5,7 @@ class AppDatabase {
   AppDatabase._();
 
   static const databaseName = 'my_health_log.db';
-  static const databaseVersion = 7;
+  static const databaseVersion = 8;
   static Database? _database;
 
   static Future<Database> open() async {
@@ -23,6 +23,7 @@ class AppDatabase {
         await _createLabResultTables(db);
         await _createSymptomTables(db);
         await _createPrnSymptomLinks(db);
+        await _createExerciseRecords(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -42,6 +43,9 @@ class AppDatabase {
         }
         if (oldVersion < 7) {
           await _createPrnSymptomLinks(db);
+        }
+        if (oldVersion < 8) {
+          await _createExerciseRecords(db);
         }
       },
     );
@@ -258,6 +262,27 @@ CREATE TABLE IF NOT EXISTS symptom_records (
       'ON symptom_records(symptomDefinitionId)',
     );
     await _seedDefaultSymptoms(db);
+  }
+
+  static Future<void> _createExerciseRecords(Database db) async {
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS exercise_records (
+  id TEXT PRIMARY KEY,
+  date TEXT NOT NULL,
+  exerciseType TEXT NOT NULL,
+  durationMinutes INTEGER NOT NULL,
+  intensity TEXT NOT NULL,
+  weightSnapshot REAL,
+  metSnapshot REAL NOT NULL,
+  estimatedCalories REAL,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL
+)
+''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_exercise_records_date '
+      'ON exercise_records(date)',
+    );
   }
 
   static Future<void> _seedDefaultSymptoms(Database db) async {

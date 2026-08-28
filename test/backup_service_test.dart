@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_health_log/models/exercise_record.dart';
 import 'package:my_health_log/models/health_record.dart';
 import 'package:my_health_log/models/lab_result.dart';
 import 'package:my_health_log/models/medication.dart';
@@ -20,7 +21,7 @@ void main() {
 
       expect(decoded.appVersion, 'test-version');
       expect(decoded.totalCount, 0);
-      expect(decoded.toJson()['backupVersion'], 4);
+      expect(decoded.toJson()['backupVersion'], 5);
       expect(decoded.snapshot.healthRecords, isEmpty);
       expect(decoded.snapshot.medications, isEmpty);
       expect(decoded.snapshot.medicationLogs, isEmpty);
@@ -28,6 +29,7 @@ void main() {
       expect(decoded.snapshot.symptomDefinitions, isEmpty);
       expect(decoded.snapshot.symptomRecords, isEmpty);
       expect(decoded.snapshot.prnSymptomLinks, isEmpty);
+      expect(decoded.snapshot.exerciseRecords, isEmpty);
       expect(decoded.snapshot.labResults, isEmpty);
     });
 
@@ -61,6 +63,14 @@ void main() {
       );
       expect(decoded.snapshot.medicationLogs.single.isTaken, isTrue);
       expect(decoded.snapshot.labResults.single.unit, 'mg/dL');
+      expect(
+        decoded.snapshot.exerciseRecords.single.exerciseType,
+        ExerciseType.walking,
+      );
+      expect(
+        decoded.snapshot.exerciseRecords.single.estimatedCalories,
+        closeTo(137.28, 0.01),
+      );
     });
 
     test(
@@ -160,6 +170,7 @@ void main() {
       expect(decoded.snapshot.symptomDefinitions, isEmpty);
       expect(decoded.snapshot.symptomRecords, isEmpty);
       expect(decoded.snapshot.prnSymptomLinks, isEmpty);
+      expect(decoded.snapshot.exerciseRecords, isEmpty);
     });
 
     test('symptom definitions round-trip through backup restore', () async {
@@ -181,36 +192,66 @@ void main() {
       );
     });
 
-    test(
-      'user-added and renamed symptom definition round-trips with records and PRN links',
-      () async {
-        final original = _userSymptomSnapshot();
-        final repository = InMemoryBackupRepository(original);
-        final service = BackupService(repository: repository);
-        final backup = await service.createBackup(createdAt: _dateTime());
+    test('V5 exercise records round-trip and preserve legacy steps', () async {
+      final original = _snapshot();
+      final repository = InMemoryBackupRepository(original);
+      final service = BackupService(repository: repository);
+      final backup = await service.createBackup(createdAt: _dateTime());
 
-        await repository.replaceWith(_symptomSnapshot(idSuffix: 'changed'));
-        await service.restoreBackup(
-          service.validateBackup(backup.toPrettyJson()),
-        );
+      await repository.replaceWith(
+        const BackupSnapshot(
+          healthRecords: [],
+          medications: [],
+          medicationLogs: [],
+          labResults: [],
+        ),
+      );
+      await service.restoreBackup(
+        service.validateBackup(backup.toPrettyJson()),
+      );
 
-        final restored = await repository.fetchSnapshot();
-        expect(restored.symptomDefinitions, hasLength(1));
-        expect(restored.symptomDefinitions.single.toMap(), {
-          'id': 'symptom-user-neck-pain',
-          'name': '목 통증',
-          'isDefault': 0,
-          'isActive': 1,
-          'sortOrder': 50,
-          'createdAt': _dateTime().toIso8601String(),
-          'updatedAt': DateTime(2026, 8, 24, 11).toIso8601String(),
-        });
-        expect(restored.symptomRecords.single.symptomDefinitionId, 'symptom-user-neck-pain');
-        expect(restored.symptomRecords.single.severity, SymptomSeverity.severe);
-        expect(restored.prnSymptomLinks.single.symptomDefinitionId, 'symptom-user-neck-pain');
-        expect(restored.toJson(), original.toJson());
-      },
-    );
+      final restored = await repository.fetchSnapshot();
+      expect(restored.exerciseRecords, hasLength(1));
+      expect(
+        restored.exerciseRecords.single.toMap(),
+        original.exerciseRecords.single.toMap(),
+      );
+      expect(restored.healthRecords.single.steps, 12345);
+    });
+
+    test('user-added and renamed symptom definition round-trips with records and PRN links', () async {
+      final original = _userSymptomSnapshot();
+      final repository = InMemoryBackupRepository(original);
+      final service = BackupService(repository: repository);
+      final backup = await service.createBackup(createdAt: _dateTime());
+
+      await repository.replaceWith(_symptomSnapshot(idSuffix: 'changed'));
+      await service.restoreBackup(
+        service.validateBackup(backup.toPrettyJson()),
+      );
+
+      final restored = await repository.fetchSnapshot();
+      expect(restored.symptomDefinitions, hasLength(1));
+      expect(restored.symptomDefinitions.single.toMap(), {
+        'id': 'symptom-user-neck-pain',
+        'name': '목 통증',
+        'isDefault': 0,
+        'isActive': 1,
+        'sortOrder': 50,
+        'createdAt': _dateTime().toIso8601String(),
+        'updatedAt': DateTime(2026, 8, 24, 11).toIso8601String(),
+      });
+      expect(
+        restored.symptomRecords.single.symptomDefinitionId,
+        'symptom-user-neck-pain',
+      );
+      expect(restored.symptomRecords.single.severity, SymptomSeverity.severe);
+      expect(
+        restored.prnSymptomLinks.single.symptomDefinitionId,
+        'symptom-user-neck-pain',
+      );
+      expect(restored.toJson(), original.toJson());
+    });
 
     test('symptom records round-trip with severity', () async {
       final original = _symptomSnapshot(idSuffix: 'original');
@@ -284,38 +325,39 @@ void main() {
       expect(restored.prnSymptomLinks, isEmpty);
     });
 
-    test(
-      'legacy backup versions restore with empty symptom collections',
-      () async {
-        for (final version in [1, 2, 3]) {
-          final repository = InMemoryBackupRepository(
-            _symptomSnapshot(idSuffix: 'stale-$version'),
-          );
-          final service = BackupService(repository: repository);
-          final legacy = jsonEncode({
-            'app': 'My Health Log',
-            'backupVersion': version,
-            'createdAt': '2026-08-24T10:30:45.000',
-            'appVersion': '1.0.1+2',
-            'data': {
-              'healthRecords': <Object?>[],
-              'medications': <Object?>[],
-              'medicationLogs': <Object?>[],
-              if (version >= 2) 'prnMedicationLogs': <Object?>[],
-              if (version >= 3) 'medicationDoseHistory': <Object?>[],
-              'labResults': <Object?>[],
-            },
-          });
+    test('legacy backup versions restore with empty symptom and exercise collections', () async {
+      for (final version in [1, 2, 3, 4]) {
+        final repository = InMemoryBackupRepository(
+          _symptomSnapshot(idSuffix: 'stale-$version'),
+        );
+        final service = BackupService(repository: repository);
+        final legacy = jsonEncode({
+          'app': 'My Health Log',
+          'backupVersion': version,
+          'createdAt': '2026-08-24T10:30:45.000',
+          'appVersion': '1.0.1+2',
+          'data': {
+            'healthRecords': <Object?>[],
+            'medications': <Object?>[],
+            'medicationLogs': <Object?>[],
+            if (version >= 2) 'prnMedicationLogs': <Object?>[],
+            if (version >= 3) 'medicationDoseHistory': <Object?>[],
+            if (version >= 4) 'symptomDefinitions': <Object?>[],
+            if (version >= 4) 'symptomRecords': <Object?>[],
+            if (version >= 4) 'prnSymptomLinks': <Object?>[],
+            'labResults': <Object?>[],
+          },
+        });
 
-          await service.restoreBackup(service.validateBackup(legacy));
+        await service.restoreBackup(service.validateBackup(legacy));
 
-          final restored = await repository.fetchSnapshot();
-          expect(restored.symptomDefinitions, isEmpty);
-          expect(restored.symptomRecords, isEmpty);
-          expect(restored.prnSymptomLinks, isEmpty);
-        }
-      },
-    );
+        final restored = await repository.fetchSnapshot();
+        expect(restored.symptomDefinitions, isEmpty);
+        expect(restored.symptomRecords, isEmpty);
+        expect(restored.prnSymptomLinks, isEmpty);
+        expect(restored.exerciseRecords, isEmpty);
+      }
+    });
 
     test('backup version 4 requires symptom definitions collection', () {
       final service = BackupService(repository: InMemoryBackupRepository());
@@ -345,6 +387,17 @@ void main() {
       expect(
         () => service.validateBackup(
           _version4BackupJson(omitKey: 'prnSymptomLinks'),
+        ),
+        throwsA(isA<BackupValidationException>()),
+      );
+    });
+
+    test('backup version 5 requires exercise records collection', () {
+      final service = BackupService(repository: InMemoryBackupRepository());
+
+      expect(
+        () => service.validateBackup(
+          _version5BackupJson(omitKey: 'exerciseRecords'),
         ),
         throwsA(isA<BackupValidationException>()),
       );
@@ -479,6 +532,7 @@ extension on BackupSnapshot {
         symptomDefinitions.length +
         symptomRecords.length +
         prnSymptomLinks.length +
+        exerciseRecords.length +
         labResults.length;
   }
 }
@@ -559,6 +613,23 @@ BackupSnapshot _snapshot({String idSuffix = 'sample'}) {
         updatedAt: now,
       ),
     ],
+    exerciseRecords: [_exerciseRecord(idSuffix)],
+  );
+}
+
+ExerciseRecord _exerciseRecord(String idSuffix) {
+  final now = _dateTime();
+  return ExerciseRecord(
+    id: 'exercise-$idSuffix',
+    date: DateTime(2026, 8, 24),
+    exerciseType: ExerciseType.walking,
+    durationMinutes: 60,
+    intensity: ExerciseIntensity.moderate,
+    weightSnapshot: 60.2,
+    metSnapshot: 3.8,
+    estimatedCalories: 137.28,
+    createdAt: now,
+    updatedAt: now,
   );
 }
 
@@ -632,6 +703,7 @@ BackupSnapshot _symptomSnapshot({
             ),
           ]
         : const [],
+    exerciseRecords: [_exerciseRecord(idSuffix)],
     labResults: const [],
   );
 }
@@ -699,6 +771,7 @@ BackupSnapshot _userSymptomSnapshot() {
         createdAt: now,
       ),
     ],
+    exerciseRecords: const [],
     labResults: const [],
   );
 }
@@ -718,6 +791,28 @@ String _version4BackupJson({required String omitKey}) {
   return jsonEncode({
     'app': 'My Health Log',
     'backupVersion': 4,
+    'createdAt': '2026-08-24T10:30:45.000',
+    'appVersion': '1.0.1+2',
+    'data': data,
+  });
+}
+
+String _version5BackupJson({required String omitKey}) {
+  final data = <String, Object?>{
+    'healthRecords': <Object?>[],
+    'medications': <Object?>[],
+    'medicationLogs': <Object?>[],
+    'prnMedicationLogs': <Object?>[],
+    'medicationDoseHistory': <Object?>[],
+    'symptomDefinitions': <Object?>[],
+    'symptomRecords': <Object?>[],
+    'prnSymptomLinks': <Object?>[],
+    'exerciseRecords': <Object?>[],
+    'labResults': <Object?>[],
+  }..remove(omitKey);
+  return jsonEncode({
+    'app': 'My Health Log',
+    'backupVersion': 5,
     'createdAt': '2026-08-24T10:30:45.000',
     'appVersion': '1.0.1+2',
     'data': data,

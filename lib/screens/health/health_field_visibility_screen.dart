@@ -47,13 +47,6 @@ class HealthFieldVisibilityScreen extends StatelessWidget {
                   ),
                 ),
                 _VisibilitySwitch(
-                  key: const Key('visibility-steps-switch'),
-                  title: '\uC6B4\uB3D9',
-                  value: service.stepsVisible,
-                  onChanged: (value) =>
-                      service.setVisible(HealthFieldVisibilityKey.steps, value),
-                ),
-                _VisibilitySwitch(
                   key: const Key('visibility-sleep-switch'),
                   title: '\uC218\uBA74',
                   value: service.sleepHoursVisible,

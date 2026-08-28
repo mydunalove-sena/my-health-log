@@ -5,6 +5,7 @@ import 'package:my_health_log/models/medication.dart';
 import 'package:my_health_log/models/symptom.dart';
 import 'package:my_health_log/screens/data_management/data_management_screen.dart';
 import 'package:my_health_log/services/backup_service.dart';
+import 'package:my_health_log/services/exercise_service.dart';
 import 'package:my_health_log/services/health_record_service.dart';
 import 'package:my_health_log/services/lab_result_service.dart';
 import 'package:my_health_log/services/medication_service.dart';
@@ -64,7 +65,19 @@ void main() {
     );
     final medicationService = MedicationService(medicationStorage);
     final symptomService = SymptomService(symptomStorage);
-    await Future.wait([medicationService.load(), symptomService.load()]);
+    final healthRecordService = HealthRecordService(
+      InMemoryHealthRecordStorage(),
+    );
+    final exerciseService = ExerciseService(
+      InMemoryExerciseRecordStorage(),
+      healthRecordService,
+    );
+    await Future.wait([
+      healthRecordService.load(),
+      medicationService.load(),
+      symptomService.load(),
+      exerciseService.load(),
+    ]);
 
     expect(
       symptomService.severityForDateAndSymptom(date, 'symptom-headache'),
@@ -100,12 +113,11 @@ void main() {
       MaterialApp(
         home: DataManagementScreen(
           backupService: backupService,
-          healthRecordService: HealthRecordService(
-            InMemoryHealthRecordStorage(),
-          ),
+          healthRecordService: healthRecordService,
           medicationService: medicationService,
           labResultService: LabResultService(InMemoryLabResultStorage()),
           symptomService: symptomService,
+          exerciseService: exerciseService,
         ),
       ),
     );

@@ -346,6 +346,82 @@ This check is recorded separately from the strengthened device QA count above. T
 | QA-HOME-MED-04 | Home scroll reaches the final medication | PASS |
 | QA-HOME-MED-05 | Medication confirmation button remains reachable | PASS |
 
+## V3.1.0 Exercise Records
+
+### Exercise Service / Model
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V3-EX-TC-01 | Model | Map round-trip an `ExerciseRecord` | All fields are preserved |
+| V3-EX-TC-02 | Save | Save walking, 30 minutes, moderate intensity | Record saves with exercise type, duration, intensity, MET snapshot, and expected calorie policy |
+| V3-EX-TC-03 | Multiple per day | Save walking and cycling on the same date | Both records exist; date is not unique |
+| V3-EX-TC-04 | Date query | Query records for one date | Only records for that date are returned |
+| V3-EX-TC-05 | Sorting | Load all exercise records | Records are ordered by date descending |
+| V3-EX-TC-06 | Future date | Save an exercise dated tomorrow | Save is rejected and no record is inserted |
+| V3-EX-TC-07 | Duration zero | Save `0` minutes | Save is rejected |
+| V3-EX-TC-08 | Duration negative | Save a negative duration | Save is rejected |
+| V3-EX-TC-09 | Weight snapshot | Save exercise on a date with `HealthRecord.weight` | `weightSnapshot` stores that date's weight |
+| V3-EX-TC-10 | No weight | Save exercise on a date without health weight | Record saves with `weightSnapshot == null` and `estimatedCalories == null` |
+| V3-EX-TC-11 | MET snapshot | Save by exercise type and intensity | `metSnapshot` matches the app MET constant |
+| V3-EX-TC-12 | Estimated calories | Save exercise with weight and duration | `estimatedCalories` equals `metSnapshot * weightSnapshot * durationMinutes / 60` |
+| V3-EX-TC-13 | Same-date edit | Change duration or intensity without changing date | Existing `weightSnapshot` is preserved and calories are recalculated |
+| V3-EX-TC-14 | Date-change edit | Change exercise date to another date with different weight | New date's `weightSnapshot` is applied and calories are recalculated |
+| V3-EX-TC-15 | Edit | Update an existing exercise | Updated values persist |
+| V3-EX-TC-16 | Delete | Delete an existing exercise | Exercise record is removed |
+| V3-EX-TC-17 | Persistence | Reload from SQLite storage | Saved exercise records and snapshots remain available |
+
+### Exercise UI / Navigation
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V3-EX-UI-TC-01 | ExerciseScreen | Open exercise history | Past records render by date descending |
+| V3-EX-UI-TC-02 | ExerciseScreen | Same date has multiple records | Multiple records for that date render |
+| V3-EX-UI-TC-03 | ExerciseScreen | Record has calculated calories | UI uses `예상 소모 칼로리` text |
+| V3-EX-UI-TC-04 | ExerciseScreen | Record has no weight snapshot | UI displays expected calorie calculation unavailable |
+| V3-EX-UI-TC-05 | Health navigation | Tap Health screen exercise-record action | Exercise screen opens |
+| V3-EX-UI-TC-06 | Home | Render Home with `ExerciseService` connected | Home renders without crash and without treating legacy steps as new exercise |
+
+### Exercise Backup / Compatibility
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V3-EX-BACKUP-TC-01 | Backup V5 | Create backup with exercise records | backupVersion 5 includes `exerciseRecords` |
+| V3-EX-BACKUP-TC-02 | Backup V5 | Restore V5 backup in automated regression | Exercise records round-trip |
+| V3-EX-BACKUP-TC-03 | Backup V4 | Restore backupVersion 4 without `exerciseRecords` | Restore succeeds with empty exercise records |
+| V3-EX-BACKUP-TC-04 | Legacy steps | Backup/restore health records with steps | Legacy `healthRecords.steps` is preserved |
+| V3-EX-BACKUP-TC-05 | Migration scope | Existing steps data exists | Steps are not converted into `ExerciseRecord` |
+
+### V3.1.0 Automated QA
+
+- Focused tests: 73 PASS, 0 FAIL.
+- Full regression initial run: 199 PASS, 1 FAIL. The failure was a stale V3.0.1 compatibility-test expectation for `databaseVersion 7` and `backupVersion 4`, not an app functional defect.
+- After updating the V3.1 expected versions to `databaseVersion 8` and `backupVersion 5`, final full regression passed: 200 PASS, 0 FAIL.
+- `flutter analyze`: PASS, No issues found.
+- `git diff --check`: PASS. Only LF -> CRLF warnings were reported.
+
+### V3.1.0 Release APK Build
+
+- Command: `flutter build apk --release`.
+- Result: PASS.
+- APK: `build\app\outputs\flutter-apk\app-release.apk`.
+- APK size: 54,214,009 bytes, about 51.7 MB.
+- SHA-256: `95704F75F9FF9F90767B3F5B1F82E877ACE1829E3D8F653361CAE3FFB15768CF`.
+
+### V3.1.0 Android Device QA
+
+- Device: Samsung SM-S918N, Android 16, SDK 36.
+- Exercise DB / Service checks passed: multiple exercises per day, weight snapshot, MET snapshot, estimated calories, no-weight date save, future-date rejection, and zero/negative duration rejection.
+- Exercise edit checks passed: same-date edit preserved snapshot, date change created a new weight snapshot, and calories recalculated.
+- SQLite persistence passed after creating a new service/storage instance and reloading.
+- ExerciseScreen, Health -> Exercise navigation, and Home smoke passed.
+- Backup V5 serialization passed: backupVersion 5, `exerciseRecords` included, JSON round-trip preserved ExerciseRecord snapshot fields.
+- QA data cleanup passed.
+- `adb install -r` passed.
+- Release launch stability passed 3/3.
+- Final logcat showed no fatal app crash.
+- Confirmed app functional failures: 0.
+- Real-device full DB Restore round-trip was not run to protect existing user data. Backup/Restore round-trip is covered by automated regression; real-device QA covered Backup V5 serialization only.
+
 ## Regression
 
 | ID | Area | Scenario | Expected |

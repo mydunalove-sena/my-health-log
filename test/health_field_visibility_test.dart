@@ -47,7 +47,7 @@ void main() {
 
     expect(find.byKey(const Key('health-water-field')), findsNothing);
     expect(find.byKey(const Key('health-weight-field')), findsOneWidget);
-    expect(find.byKey(const Key('health-steps-field')), findsOneWidget);
+    expect(find.byKey(const Key('health-steps-field')), findsNothing);
   });
 
   test('persists field visibility after service reload', () async {
@@ -155,7 +155,7 @@ void main() {
     );
   });
 
-  testWidgets('keeps all six home health cards visible by default', (
+  testWidgets('keeps visible home health cards and omits legacy steps card', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -167,11 +167,11 @@ void main() {
       ),
     );
 
-    expect(find.byType(HealthSummaryCard), findsNWidgets(6));
+    expect(find.byType(HealthSummaryCard), findsNWidgets(5));
     expect(find.byKey(const Key('home-weight-card')), findsOneWidget);
     expect(find.byKey(const Key('home-blood-pressure-card')), findsOneWidget);
     expect(find.byKey(const Key('home-water-card')), findsOneWidget);
-    expect(find.byKey(const Key('home-steps-card')), findsOneWidget);
+    expect(find.byKey(const Key('home-steps-card')), findsNothing);
     expect(find.byKey(const Key('home-sleep-card')), findsOneWidget);
     expect(find.byKey(const Key('home-condition-card')), findsOneWidget);
   });

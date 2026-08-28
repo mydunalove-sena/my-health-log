@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import 'core/theme/app_theme.dart';
 import 'screens/data_management/data_management_screen.dart';
+import 'screens/exercise/exercise_screen.dart';
 import 'screens/health/health_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/lab/lab_screen.dart';
 import 'screens/medication/medication_screen.dart';
 import 'screens/statistics/statistics_screen.dart';
 import 'services/backup_service.dart';
+import 'services/exercise_service.dart';
 import 'services/health_field_visibility_service.dart';
 import 'services/health_record_service.dart';
 import 'services/lab_result_service.dart';
@@ -21,6 +23,7 @@ class MyHealthLogApp extends StatelessWidget {
     this.medicationService,
     this.labResultService,
     this.symptomService,
+    this.exerciseService,
     this.healthFieldVisibilityService,
   });
 
@@ -28,6 +31,7 @@ class MyHealthLogApp extends StatelessWidget {
   final MedicationService? medicationService;
   final LabResultService? labResultService;
   final SymptomService? symptomService;
+  final ExerciseService? exerciseService;
   final HealthFieldVisibilityService? healthFieldVisibilityService;
 
   @override
@@ -41,6 +45,7 @@ class MyHealthLogApp extends StatelessWidget {
         medicationService: medicationService,
         labResultService: labResultService,
         symptomService: symptomService,
+        exerciseService: exerciseService,
         healthFieldVisibilityService: healthFieldVisibilityService,
       ),
     );
@@ -53,6 +58,7 @@ class _AppBootstrap extends StatefulWidget {
     this.medicationService,
     this.labResultService,
     this.symptomService,
+    this.exerciseService,
     this.healthFieldVisibilityService,
   });
 
@@ -60,6 +66,7 @@ class _AppBootstrap extends StatefulWidget {
   final MedicationService? medicationService;
   final LabResultService? labResultService;
   final SymptomService? symptomService;
+  final ExerciseService? exerciseService;
   final HealthFieldVisibilityService? healthFieldVisibilityService;
 
   @override
@@ -71,6 +78,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
   late final MedicationService _medicationService;
   late final LabResultService _labResultService;
   late final SymptomService _symptomService;
+  late final ExerciseService _exerciseService;
   late final HealthFieldVisibilityService _fieldVisibilityService;
   late final Future<void> _loadFuture;
 
@@ -92,6 +100,14 @@ class _AppBootstrapState extends State<_AppBootstrap> {
               ? InMemorySymptomStorage()
               : SqfliteSymptomStorage(),
         );
+    _exerciseService =
+        widget.exerciseService ??
+        ExerciseService(
+          _hasInjectedServices
+              ? InMemoryExerciseRecordStorage()
+              : SqfliteExerciseRecordStorage(),
+          _healthService,
+        );
     _fieldVisibilityService =
         widget.healthFieldVisibilityService ??
         (_hasInjectedServices
@@ -102,6 +118,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
       _medicationService.load(),
       _labResultService.load(),
       _symptomService.load(),
+      _exerciseService.load(),
       _fieldVisibilityService.load(),
     ]);
   }
@@ -109,7 +126,9 @@ class _AppBootstrapState extends State<_AppBootstrap> {
   bool get _hasInjectedServices {
     return widget.healthRecordService != null ||
         widget.medicationService != null ||
-        widget.labResultService != null;
+        widget.labResultService != null ||
+        widget.symptomService != null ||
+        widget.exerciseService != null;
   }
 
   @override
@@ -136,6 +155,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
           medicationService: _medicationService,
           labResultService: _labResultService,
           symptomService: _symptomService,
+          exerciseService: _exerciseService,
           healthFieldVisibilityService: _fieldVisibilityService,
         );
       },
@@ -150,6 +170,7 @@ class AppShell extends StatefulWidget {
     required this.medicationService,
     required this.labResultService,
     required this.symptomService,
+    required this.exerciseService,
     required this.healthFieldVisibilityService,
   });
 
@@ -157,6 +178,7 @@ class AppShell extends StatefulWidget {
   final MedicationService medicationService;
   final LabResultService labResultService;
   final SymptomService symptomService;
+  final ExerciseService exerciseService;
   final HealthFieldVisibilityService healthFieldVisibilityService;
 
   @override
@@ -178,14 +200,17 @@ class _AppShellState extends State<AppShell> {
       HomeScreen(
         healthRecordService: widget.healthRecordService,
         medicationService: widget.medicationService,
+        exerciseService: widget.exerciseService,
         healthFieldVisibilityService: widget.healthFieldVisibilityService,
         onOpenHealthRoot: () => _selectTab(1),
         onOpenMedication: () => _selectTab(2),
+        onOpenExercise: _openExercise,
         onOpenDataManagement: _openDataManagement,
       ),
       HealthScreen(
         service: widget.healthRecordService,
         symptomService: widget.symptomService,
+        exerciseService: widget.exerciseService,
         healthFieldVisibilityService: widget.healthFieldVisibilityService,
       ),
       MedicationScreen(
@@ -247,6 +272,18 @@ class _AppShellState extends State<AppShell> {
           medicationService: widget.medicationService,
           labResultService: widget.labResultService,
           symptomService: widget.symptomService,
+          exerciseService: widget.exerciseService,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openExercise() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ExerciseScreen(
+          exerciseService: widget.exerciseService,
+          healthRecordService: widget.healthRecordService,
         ),
       ),
     );

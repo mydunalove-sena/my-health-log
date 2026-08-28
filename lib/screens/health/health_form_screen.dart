@@ -30,7 +30,6 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
   late final TextEditingController _systolicController;
   late final TextEditingController _diastolicController;
   late final TextEditingController _waterController;
-  late final TextEditingController _stepsController;
   late final TextEditingController _sleepController;
   HealthCondition? _condition;
   String? _formError;
@@ -56,9 +55,6 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
     _waterController = TextEditingController(
       text: record?.waterIntake?.toString() ?? '',
     );
-    _stepsController = TextEditingController(
-      text: record?.steps?.toString() ?? '',
-    );
     _sleepController = TextEditingController(
       text: _doubleInitial(record?.sleepHours),
     );
@@ -72,7 +68,6 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
     _systolicController.dispose();
     _diastolicController.dispose();
     _waterController.dispose();
-    _stepsController.dispose();
     _sleepController.dispose();
     super.dispose();
   }
@@ -189,16 +184,6 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                   ],
-                  if (visibility?.stepsVisible ?? true) ...[
-                    _NumberField(
-                      key: const Key('health-steps-field'),
-                      label: '운동',
-                      controller: _stepsController,
-                      unit: 'steps',
-                      validator: (value) => _positiveIntValidator(value, '운동'),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                  ],
                   if (visibility?.sleepHoursVisible ?? true) ...[
                     _NumberField(
                       key: const Key('health-sleep-field'),
@@ -266,7 +251,6 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
       _systolicController.text,
       _diastolicController.text,
       _waterController.text,
-      _stepsController.text,
       _sleepController.text,
       _condition?.value ?? '',
     ].join('|');
@@ -348,7 +332,7 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
       systolicBloodPressure: _parseInt(_systolicController.text),
       diastolicBloodPressure: _parseInt(_diastolicController.text),
       waterIntake: _parseInt(_waterController.text),
-      steps: _parseInt(_stepsController.text),
+      steps: baseRecord?.steps,
       sleepHours: _parseDouble(_sleepController.text),
       condition: _condition,
       createdAt: baseRecord?.createdAt ?? now,

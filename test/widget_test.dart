@@ -6,6 +6,7 @@ import 'package:my_health_log/core/widgets/health_summary_card.dart';
 import 'package:my_health_log/models/health_record.dart';
 import 'package:my_health_log/models/home_mock_state.dart';
 import 'package:my_health_log/models/medication.dart';
+import 'package:my_health_log/services/exercise_service.dart';
 import 'package:my_health_log/services/lab_result_service.dart';
 import 'package:my_health_log/screens/health/health_form_screen.dart';
 import 'package:my_health_log/screens/health/health_screen.dart';
@@ -59,7 +60,7 @@ void main() {
 
     expect(find.text('My Health Log'), findsOneWidget);
     expect(find.text('\uC624\uB298\uC758 \uAC74\uAC15'), findsOneWidget);
-    expect(find.byType(HealthSummaryCard), findsNWidgets(6));
+    expect(find.byType(HealthSummaryCard), findsNWidgets(5));
     expect(find.text('\uCCB4\uC911'), findsOneWidget);
     expect(find.textContaining('54.2 kg'), findsOneWidget);
     expect(find.text('\uD608\uC555'), findsOneWidget);
@@ -82,10 +83,10 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.textContaining('120 / 80 mmHg'), findsOneWidget);
-    expect(find.textContaining('6,420 \uAC78\uC74C'), findsOneWidget);
+    expect(find.text('\uC624\uB298\uC758 \uC6B4\uB3D9'), findsOneWidget);
     expect(find.textContaining('54.2 kg'), findsOneWidget);
     expect(find.textContaining('1,200 mL'), findsOneWidget);
-    expect(find.textContaining('\uC2DC\uAC04'), findsOneWidget);
+    expect(find.textContaining('6.5\uC2DC\uAC04'), findsOneWidget);
   });
 
   testWidgets('home empty state renders without crashing', (tester) async {
@@ -281,7 +282,11 @@ void main() {
     final service = await _service();
     await tester.pumpWidget(
       MaterialApp(
-        home: HealthScreen(service: service, symptomService: await _symptoms()),
+        home: HealthScreen(
+          service: service,
+          symptomService: await _symptoms(),
+          exerciseService: await _exerciseService(service),
+        ),
       ),
     );
 
@@ -293,7 +298,11 @@ void main() {
     final service = await _service();
     await tester.pumpWidget(
       MaterialApp(
-        home: HealthScreen(service: service, symptomService: await _symptoms()),
+        home: HealthScreen(
+          service: service,
+          symptomService: await _symptoms(),
+          exerciseService: await _exerciseService(service),
+        ),
       ),
     );
 
@@ -337,7 +346,11 @@ void main() {
     final service = await _service();
     await tester.pumpWidget(
       MaterialApp(
-        home: HealthScreen(service: service, symptomService: await _symptoms()),
+        home: HealthScreen(
+          service: service,
+          symptomService: await _symptoms(),
+          exerciseService: await _exerciseService(service),
+        ),
       ),
     );
 
@@ -360,7 +373,11 @@ void main() {
     final service = await _service(records: [_record(weight: 54.2)]);
     await tester.pumpWidget(
       MaterialApp(
-        home: HealthScreen(service: service, symptomService: await _symptoms()),
+        home: HealthScreen(
+          service: service,
+          symptomService: await _symptoms(),
+          exerciseService: await _exerciseService(service),
+        ),
       ),
     );
 
@@ -379,7 +396,11 @@ void main() {
     final service = await _service(records: [_record()]);
     await tester.pumpWidget(
       MaterialApp(
-        home: HealthScreen(service: service, symptomService: await _symptoms()),
+        home: HealthScreen(
+          service: service,
+          symptomService: await _symptoms(),
+          exerciseService: await _exerciseService(service),
+        ),
       ),
     );
 
@@ -411,7 +432,11 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: HealthScreen(service: service, symptomService: await _symptoms()),
+        home: HealthScreen(
+          service: service,
+          symptomService: await _symptoms(),
+          exerciseService: await _exerciseService(service),
+        ),
       ),
     );
 
@@ -452,6 +477,17 @@ Future<MedicationService> _medService({List<Medication>? medications}) async {
 
 Future<SymptomService> _symptoms() async {
   final service = SymptomService(InMemorySymptomStorage());
+  await service.load();
+  return service;
+}
+
+Future<ExerciseService> _exerciseService(
+  HealthRecordService healthService,
+) async {
+  final service = ExerciseService(
+    InMemoryExerciseRecordStorage(),
+    healthService,
+  );
   await service.load();
   return service;
 }

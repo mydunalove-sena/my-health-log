@@ -7,9 +7,11 @@ import '../../core/widgets/health_summary_card.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../core/widgets/secondary_button.dart';
 import '../../core/widgets/section_header.dart';
+import '../../models/exercise_record.dart';
 import '../../models/health_record.dart';
 import '../../models/home_mock_state.dart';
 import '../../models/medication.dart';
+import '../../services/exercise_service.dart';
 import '../../services/health_field_visibility_service.dart';
 import '../../services/health_record_service.dart';
 import '../../services/medication_service.dart';
@@ -21,25 +23,30 @@ class HomeScreen extends StatelessWidget {
     super.key,
     this.healthRecordService,
     this.medicationService,
+    this.exerciseService,
     this.healthFieldVisibilityService,
     this.mockState,
     this.onOpenHealthRoot,
     this.onOpenMedication,
+    this.onOpenExercise,
     this.onOpenDataManagement,
   });
 
   final HealthRecordService? healthRecordService;
   final MedicationService? medicationService;
+  final ExerciseService? exerciseService;
   final HealthFieldVisibilityService? healthFieldVisibilityService;
   final HomeMockState? mockState;
   final VoidCallback? onOpenHealthRoot;
   final VoidCallback? onOpenMedication;
+  final VoidCallback? onOpenExercise;
   final VoidCallback? onOpenDataManagement;
 
   @override
   Widget build(BuildContext context) {
     final healthService = healthRecordService;
     final medService = medicationService;
+    final exService = exerciseService;
     if (healthService == null) {
       Widget buildContent() {
         final mockHasMeds = mockState?.hasMedications ?? medService == null;
@@ -70,8 +77,10 @@ class HomeScreen extends StatelessWidget {
               : null,
           healthFieldVisibilityService: healthFieldVisibilityService,
           medicationItems: medicationItems,
+          exerciseRecords: const [],
           onOpenHealth: () {},
           onOpenMedication: onOpenMedication,
+          onOpenExercise: onOpenExercise,
           onAddMedication: onOpenMedication,
           onOpenDataManagement: onOpenDataManagement,
         );
@@ -90,6 +99,7 @@ class HomeScreen extends StatelessWidget {
       animation: Listenable.merge([
         healthService,
         ?medService,
+        ?exService,
         ?healthFieldVisibilityService,
       ]),
       builder: (context, _) {
@@ -99,11 +109,13 @@ class HomeScreen extends StatelessWidget {
             : medService.todayDoseItems
                   .map(_HomeMedicationItem.fromDoseItem)
                   .toList();
+        final exerciseRecords = exService?.todayRecords ?? const [];
         return _HomeContent(
           date: DateTime.now(),
           healthRecord: todayRecord,
           healthFieldVisibilityService: healthFieldVisibilityService,
           medicationItems: items,
+          exerciseRecords: exerciseRecords,
           onOpenHealth: () async {
             if (todayRecord == null) {
               await Navigator.of(context).push(
@@ -128,6 +140,7 @@ class HomeScreen extends StatelessWidget {
             onOpenHealthRoot?.call();
           },
           onOpenMedication: onOpenMedication,
+          onOpenExercise: onOpenExercise,
           onAddMedication: medService == null
               ? onOpenMedication
               : () async {
@@ -169,8 +182,10 @@ class _HomeContent extends StatelessWidget {
     required this.healthRecord,
     this.healthFieldVisibilityService,
     required this.medicationItems,
+    required this.exerciseRecords,
     required this.onOpenHealth,
     this.onOpenMedication,
+    this.onOpenExercise,
     this.onAddMedication,
     this.onOpenDataManagement,
   });
@@ -179,8 +194,10 @@ class _HomeContent extends StatelessWidget {
   final HealthRecord? healthRecord;
   final HealthFieldVisibilityService? healthFieldVisibilityService;
   final List<_HomeMedicationItem> medicationItems;
+  final List<ExerciseRecord> exerciseRecords;
   final VoidCallback onOpenHealth;
   final VoidCallback? onOpenMedication;
+  final VoidCallback? onOpenExercise;
   final VoidCallback? onAddMedication;
   final VoidCallback? onOpenDataManagement;
 
@@ -217,6 +234,11 @@ class _HomeContent extends StatelessWidget {
                 record: healthRecord,
                 visibilityService: healthFieldVisibilityService,
                 onOpenHealth: onOpenHealth,
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              _ExerciseSection(
+                records: exerciseRecords,
+                onOpenExercise: onOpenExercise,
               ),
               const SizedBox(height: AppSpacing.xl),
               _MedicationSection(
@@ -324,14 +346,6 @@ class _HealthSection extends StatelessWidget {
           unit: record.waterIntake == null ? null : 'mL',
           icon: Icons.water_drop_outlined,
         ),
-      if (visibility?.stepsVisible ?? true)
-        HealthSummaryCard(
-          key: const Key('home-steps-card'),
-          title: '\uC6B4\uB3D9',
-          value: _intText(record.steps),
-          unit: record.steps == null ? null : '\uAC78\uC74C',
-          icon: Icons.directions_walk_outlined,
-        ),
       if (visibility?.sleepHoursVisible ?? true)
         HealthSummaryCard(
           key: const Key('home-sleep-card'),
@@ -378,6 +392,81 @@ class _HealthSection extends StatelessWidget {
       }
     }
     return buffer.toString();
+  }
+}
+
+class _ExerciseSection extends StatelessWidget {
+  const _ExerciseSection({required this.records, this.onOpenExercise});
+
+  final List<ExerciseRecord> records;
+  final VoidCallback? onOpenExercise;
+
+  @override
+  Widget build(BuildContext context) {
+    final totalMinutes = records.fold<int>(
+      0,
+      (sum, record) => sum + record.durationMinutes,
+    );
+    final calculable = records.where(
+      (record) => record.estimatedCalories != null,
+    );
+    final calorieSum = calculable.fold<double>(
+      0,
+      (sum, record) => sum + record.estimatedCalories!,
+    );
+    final hasUncalculated = records.any(
+      (record) => record.estimatedCalories == null,
+    );
+    final typeText = records.isEmpty
+        ? '기록 없음'
+        : records.map((record) => record.exerciseType.label).toSet().join(', ');
+    final calorieText = records.isEmpty
+        ? '예상 소모 칼로리 계산 불가'
+        : calculable.isEmpty
+        ? '예상 소모 칼로리 계산 불가'
+        : hasUncalculated
+        ? '계산 가능한 운동 예상 소모 칼로리 ${calorieSum.round()} kcal'
+        : '예상 소모 칼로리 ${calorieSum.round()} kcal';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: '오늘의 운동'),
+        const SizedBox(height: AppSpacing.sm),
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                records.isEmpty
+                    ? '운동 기록이 없습니다.'
+                    : '$typeText · ${records.length}건',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '총 운동 시간 $totalMinutes분',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                calorieText,
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: AppColors.secondaryText),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        SecondaryButton(label: '운동 기록', onPressed: onOpenExercise ?? () {}),
+      ],
+    );
   }
 }
 
@@ -443,10 +532,7 @@ class _MedicationSection extends StatelessWidget {
 }
 
 class _MedicationTimeSlotGroup extends StatelessWidget {
-  const _MedicationTimeSlotGroup({
-    required this.timeSlot,
-    required this.items,
-  });
+  const _MedicationTimeSlotGroup({required this.timeSlot, required this.items});
 
   final MedicationTimeSlot timeSlot;
   final List<_HomeMedicationItem> items;
@@ -533,10 +619,7 @@ class _HomeMedicationItem {
     final displayedDose = item.isTaken
         ? item.log?.displayDoseSnapshot
         : item.medication.displayDose;
-    final detailParts = [
-      ?displayedDose,
-      state,
-    ];
+    final detailParts = [?displayedDose, state];
     return _HomeMedicationItem(
       name: item.medication.name,
       detail: detailParts.join(' \u00B7 '),

@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/health_record.dart';
 import '../models/lab_result.dart';
 import '../models/medication.dart';
+import '../models/exercise_record.dart';
 import '../models/symptom.dart';
 import 'app_database.dart';
 
@@ -32,6 +33,7 @@ class BackupSnapshot {
     this.symptomDefinitions = const [],
     this.symptomRecords = const [],
     this.prnSymptomLinks = const [],
+    this.exerciseRecords = const [],
   });
 
   final List<HealthRecord> healthRecords;
@@ -42,6 +44,7 @@ class BackupSnapshot {
   final List<SymptomDefinition> symptomDefinitions;
   final List<SymptomRecord> symptomRecords;
   final List<PrnSymptomLink> prnSymptomLinks;
+  final List<ExerciseRecord> exerciseRecords;
   final List<LabResult> labResults;
 
   Map<String, Object?> toJson() {
@@ -60,6 +63,9 @@ class BackupSnapshot {
           .toList(),
       'symptomRecords': symptomRecords.map((record) => record.toMap()).toList(),
       'prnSymptomLinks': prnSymptomLinks.map((link) => link.toMap()).toList(),
+      'exerciseRecords': exerciseRecords
+          .map((record) => record.toMap())
+          .toList(),
       'labResults': labResults.map((result) => result.toMap()).toList(),
     };
   }
@@ -111,6 +117,12 @@ class BackupSnapshot {
       PrnSymptomLink.fromMap,
       isRequired: backupVersion >= 4,
     );
+    final exerciseRecords = _readVersionedCollection(
+      json,
+      'exerciseRecords',
+      ExerciseRecord.fromMap,
+      isRequired: backupVersion >= 5,
+    );
     final labResults = _readCollection(json, 'labResults', LabResult.fromMap);
 
     final medicationIds = medications.map((item) => item.id).toSet();
@@ -148,6 +160,7 @@ class BackupSnapshot {
       symptomDefinitions: symptomDefinitions,
       symptomRecords: symptomRecords,
       prnSymptomLinks: prnSymptomLinks,
+      exerciseRecords: exerciseRecords,
       labResults: labResults,
     );
   }
@@ -219,8 +232,8 @@ class BackupDocument {
   });
 
   static const appName = 'My Health Log';
-  static const backupVersion = 4;
-  static const supportedBackupVersions = {1, 2, 3, 4};
+  static const backupVersion = 5;
+  static const supportedBackupVersions = {1, 2, 3, 4, 5};
 
   final DateTime createdAt;
   final String appVersion;
@@ -235,6 +248,7 @@ class BackupDocument {
         snapshot.symptomDefinitions.length +
         snapshot.symptomRecords.length +
         snapshot.prnSymptomLinks.length +
+        snapshot.exerciseRecords.length +
         snapshot.labResults.length;
   }
 
@@ -309,6 +323,7 @@ class SqfliteBackupRepository implements BackupRepository {
   static const _symptomDefinitionsTable = 'symptom_definitions';
   static const _symptomRecordsTable = 'symptom_records';
   static const _prnSymptomLinksTable = 'prn_symptom_links';
+  static const _exerciseRecordsTable = 'exercise_records';
   static const _labResultsTable = 'lab_results';
 
   @override
@@ -346,6 +361,10 @@ class SqfliteBackupRepository implements BackupRepository {
       _prnSymptomLinksTable,
       orderBy: 'createdAt ASC',
     );
+    final exerciseRows = await db.query(
+      _exerciseRecordsTable,
+      orderBy: 'date DESC, createdAt DESC',
+    );
     final labRows = await db.query(_labResultsTable, orderBy: 'date DESC');
 
     return BackupSnapshot(
@@ -361,6 +380,7 @@ class SqfliteBackupRepository implements BackupRepository {
           .toList(),
       symptomRecords: symptomRecordRows.map(SymptomRecord.fromMap).toList(),
       prnSymptomLinks: prnSymptomLinkRows.map(PrnSymptomLink.fromMap).toList(),
+      exerciseRecords: exerciseRows.map(ExerciseRecord.fromMap).toList(),
       labResults: labRows.map(LabResult.fromMap).toList(),
     );
   }
@@ -376,6 +396,7 @@ class SqfliteBackupRepository implements BackupRepository {
       await txn.delete(_medicationLogsTable);
       await txn.delete(_medicationsTable);
       await txn.delete(_symptomDefinitionsTable);
+      await txn.delete(_exerciseRecordsTable);
       await txn.delete(_healthRecordsTable);
       await txn.delete(_labResultsTable);
 
@@ -402,6 +423,9 @@ class SqfliteBackupRepository implements BackupRepository {
       }
       for (final link in snapshot.prnSymptomLinks) {
         await txn.insert(_prnSymptomLinksTable, link.toMap());
+      }
+      for (final record in snapshot.exerciseRecords) {
+        await txn.insert(_exerciseRecordsTable, record.toMap());
       }
       for (final result in snapshot.labResults) {
         await txn.insert(_labResultsTable, result.toMap());

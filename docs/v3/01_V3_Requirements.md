@@ -6,6 +6,8 @@ V3 improves medication management and symptom logging based on real usage while 
 
 V3.0.1 is a HOT FIX after the V3.0.0 release. It addresses immediate real-use friction in lab-result CRUD, medication-history lookup, Home today's scheduled-medication display, and statistics list date display without changing the database schema, backup payload, or V3.0.0 data compatibility.
 
+V3.1.0 adds exercise-record improvements by separating exercise from legacy `HealthRecord.steps` while preserving existing V3 data compatibility.
+
 ## Fixed Principles
 
 - V2 remains the baseline and is not rebuilt from scratch.
@@ -264,3 +266,66 @@ Applies to HealthRecord and LabResult.
 - V301-COMPAT-03: V3.0.1 does not change the DB schema.
 - V301-COMPAT-04: V3.0.1 does not change backup payload shape.
 - V301-COMPAT-05: Existing V3.0.0 data remains compatible.
+
+## V3.1.0: Exercise Records
+
+### Scope
+
+- V310-EX-SCOPE-01: Exercise recording is separated from `HealthRecord.steps` into an independent `ExerciseRecord` structure.
+- V310-EX-SCOPE-02: V3.1.0 supports exercise create, past-record lookup, edit, and delete.
+- V310-EX-SCOPE-03: A user can save multiple exercise records on the same date.
+- V310-EX-SCOPE-04: Exercise is reachable from the Health screen without adding a sixth root bottom-navigation tab.
+- V310-EX-SCOPE-05: Home shows exercise through `ExerciseService`, not through legacy `HealthRecord.steps`.
+
+### ExerciseRecord
+
+- V310-EX-MODEL-01: `ExerciseRecord` stores `id`, `date`, `exerciseType`, `durationMinutes`, `intensity`, `weightSnapshot`, `metSnapshot`, `estimatedCalories`, `createdAt`, and `updatedAt`.
+- V310-EX-MODEL-02: `ExerciseType` values are walking, running, cycling, hiking, swimming, strengthTraining, stationaryBike, treadmill, elliptical, stairs, yogaStretching, and other.
+- V310-EX-MODEL-03: Exercise type labels are `걷기`, `달리기`, `자전거`, `등산`, `수영`, `근력운동`, `실내자전거`, `러닝머신`, `일립티컬`, `계단운동`, `요가·스트레칭`, and `기타`.
+- V310-EX-MODEL-04: `ExerciseIntensity` values are light, moderate, and vigorous, displayed as `가볍게`, `보통`, and `강하게`.
+- V310-EX-MODEL-05: Stored enum values and display labels remain distinct, with value-based restoration for DB and backup data.
+
+### Validation and Calculation
+
+- V310-EX-VAL-01: Exercise dates in the future are rejected.
+- V310-EX-VAL-02: `durationMinutes` must be a positive integer.
+- V310-EX-CAL-01: MET values are managed in one app constant source, not duplicated in screens or services.
+- V310-EX-CAL-02: `metSnapshot` is stored from the selected exercise type and intensity.
+- V310-EX-CAL-03: UI text must use `예상 소모 칼로리`.
+- V310-EX-CAL-04: The app must not claim exact calories or Samsung Health-equivalent calorie values.
+- V310-EX-CAL-05: `estimatedCalories = metSnapshot * weightSnapshot * durationMinutes / 60`.
+- V310-EX-CAL-06: If `weightSnapshot` is `null`, `estimatedCalories` is `null` and UI displays that expected calorie calculation is unavailable.
+
+### Weight Snapshot Policy
+
+- V310-EX-SNAP-01: New exercise creation snapshots `HealthRecord.weight` for the exercise date.
+- V310-EX-SNAP-02: Exercise creation succeeds even when the exercise date has no health weight record.
+- V310-EX-SNAP-03: Editing an exercise without changing the date preserves the existing `weightSnapshot`.
+- V310-EX-SNAP-04: Changing the exercise date creates a new `weightSnapshot` from the new date's health record.
+- V310-EX-SNAP-05: Later health-record weight edits do not automatically change existing exercise snapshots.
+- V310-EX-SNAP-06: Changing exercise type, intensity, or duration recalculates `metSnapshot` and `estimatedCalories` from the stored snapshot policy.
+
+### DB and Backup
+
+- V310-EX-DB-01: `databaseVersion` increases from 7 to 8.
+- V310-EX-DB-02: V3.1.0 adds `exercise_records`.
+- V310-EX-DB-03: `exercise_records.date` is not unique because multiple exercises per day are allowed.
+- V310-EX-DB-04: V3.1.0 does not delete or alter `health_records.steps`.
+- V310-EX-BACKUP-01: `backupVersion` increases from 4 to 5.
+- V310-EX-BACKUP-02: Supported backup versions are 1, 2, 3, 4, and 5.
+- V310-EX-BACKUP-03: V5 backups include `exerciseRecords`.
+- V310-EX-BACKUP-04: V1 through V4 backups without `exerciseRecords` remain restorable.
+- V310-EX-BACKUP-05: Legacy `healthRecords.steps` values remain preserved through backup/restore.
+- V310-EX-BACKUP-06: Steps are not migrated or converted into `ExerciseRecord`.
+
+### Legacy Steps Compatibility
+
+- V310-EX-LEGACY-01: `HealthRecord.steps` remains in the model for legacy compatibility.
+- V310-EX-LEGACY-02: `health_records.steps` remains in the DB schema.
+- V310-EX-LEGACY-03: New health-record UI no longer provides steps input.
+- V310-EX-LEGACY-04: Editing an existing health record preserves existing steps values even though the steps input is no longer visible.
+- V310-EX-LEGACY-05: Home no longer displays legacy steps as exercise.
+
+### Excluded Scope
+
+- V310-EX-NON-01: V3.1.0 does not add GPS, distance, elevation, heart-rate capture, Samsung Health, Google Fit, exercise auto-detection, exercise goals, advanced exercise statistics, or custom exercise-type CRUD.

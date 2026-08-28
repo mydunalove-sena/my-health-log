@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/backup_service.dart';
+import '../../services/exercise_service.dart';
 import '../../services/health_record_service.dart';
 import '../../services/lab_result_service.dart';
 import '../../services/medication_service.dart';
@@ -14,6 +15,7 @@ class DataManagementScreen extends StatefulWidget {
     required this.medicationService,
     required this.labResultService,
     required this.symptomService,
+    required this.exerciseService,
   });
 
   final BackupService backupService;
@@ -21,6 +23,7 @@ class DataManagementScreen extends StatefulWidget {
   final MedicationService medicationService;
   final LabResultService labResultService;
   final SymptomService symptomService;
+  final ExerciseService exerciseService;
 
   @override
   State<DataManagementScreen> createState() => _DataManagementScreenState();
@@ -140,6 +143,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
         widget.medicationService.load(),
         widget.labResultService.load(),
         widget.symptomService.load(),
+        widget.exerciseService.load(),
       ]);
       if (mounted) {
         _showMessage('데이터 복원이 완료되었습니다.');
