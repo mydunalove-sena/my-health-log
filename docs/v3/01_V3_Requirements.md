@@ -4,6 +4,8 @@
 
 V3 improves medication management and symptom logging based on real usage while preserving the V2 baseline and existing user data.
 
+V3.0.1 is a HOT FIX after the V3.0.0 release. It addresses immediate real-use friction in lab-result CRUD, medication-history lookup, and statistics list date display without changing the database schema, backup payload, or V3.0.0 data compatibility.
+
 ## Fixed Principles
 
 - V2 remains the baseline and is not rebuilt from scratch.
@@ -194,3 +196,57 @@ Applies to HealthRecord and LabResult.
 ## Deferred After P1-3
 
 - Advanced PRN/symptom statistics.
+
+## V3.0.1 HOT FIX: Lab CRUD UX / Medication History / Statistics Date Display
+
+### Scope
+
+- V3.0.1 improves only high-friction V3.0.0 usage paths.
+- V3.0.1 does not add V3.1.0 features such as lab reference ranges, automatic lab-unit memory, exercise restructuring, calories, GPS/distance/elevation/heart-rate capture, Samsung Health, InBody integration, or medical normal/risk judgment.
+
+### Lab Result CRUD UX
+
+- V301-LAB-01: A lab-result date detail row must show explicit edit and delete actions.
+- V301-LAB-02: The existing row-tap edit behavior may remain available.
+- V301-LAB-03: The lab-result edit form must continue to allow date changes, including correcting a result saved with today's date to a past date.
+- V301-LAB-04: Lab-result delete must keep confirmation before removal.
+- V301-LAB-05: Deleting the last result on a date must remove the empty date group/detail state.
+- V301-LAB-06: Saving a new lab result from the main `+` flow must navigate to the saved date's detail screen.
+- V301-LAB-07: Adding another result from the detail screen's `+ 검사 항목 추가` flow must keep that detail date as the initial date.
+- V301-LAB-08: Multiple lab results on the same date must remain grouped on that date.
+- V301-LAB-09: V3.0.1 must not change the `LabResult` model, `lab_results` schema, or `LabResultService` data structure.
+
+### Medication History
+
+- V301-MED-01: Today's medication screen must provide an explicit `기록` entry point while preserving the existing `관리` entry point.
+- V301-MED-02: Medication history must be a separate read-only screen.
+- V301-MED-03: Medication history must not add past medication edit or delete actions.
+- V301-MED-04: Medication history must display only actually stored scheduled `medication_logs` and PRN `prn_medication_logs`.
+- V301-MED-05: A missing scheduled log must not be fabricated or displayed as a missed-dose record.
+- V301-MED-06: An actual stored scheduled log with `isTaken == false` may be displayed as a saved missed-dose record and must remain distinguishable from no log.
+- V301-MED-07: A taken scheduled historical log must display its dose snapshot when a snapshot exists.
+- V301-MED-08: A legacy scheduled log with no dose snapshot must not fall back to the current medication dose as historical dose.
+- V301-MED-09: Inactive or soft-deleted medications may be used for historical medication-id-to-name lookup through an all-medications read API.
+- V301-MED-10: V3.0.1 must not add a medication-name snapshot column or any database migration.
+- V301-MED-11: PRN history must display the stored `PrnMedicationLog.takenAt`, `doseValue`, and `doseUnit`.
+- V301-MED-12: PRN history must not fall back to the current medication dose.
+- V301-MED-13: PRN related symptoms must be resolved through existing `prn_symptom_links`.
+- V301-MED-14: PRN logs without related symptoms must still display normally.
+- V301-MED-15: Multiple PRN logs on the same date must display as separate history entries.
+- V301-MED-16: Related symptoms must be presented neutrally; the app must not infer cause, effect, improvement, worsening, diagnosis, risk, or medication advice.
+
+### Statistics Date Display
+
+- V301-STAT-01: Statistics value-list dates must display the existing `MM.dd` string on one line.
+- V301-STAT-02: The shared value-row date display fix applies to weight, blood pressure, and lab statistics lists.
+- V301-STAT-03: V3.0.1 must not change the date string format.
+- V301-STAT-04: V3.0.1 must not change chart or x-axis date rendering.
+- V301-STAT-05: The date display fix must not change statistics data calculation.
+
+### Compatibility
+
+- V301-COMPAT-01: `databaseVersion` remains 7.
+- V301-COMPAT-02: `backupVersion` remains 4.
+- V301-COMPAT-03: V3.0.1 does not change the DB schema.
+- V301-COMPAT-04: V3.0.1 does not change backup payload shape.
+- V301-COMPAT-05: Existing V3.0.0 data remains compatible.

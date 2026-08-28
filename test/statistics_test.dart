@@ -99,6 +99,30 @@ void main() {
     );
   });
 
+  testWidgets('Weight date row stays single line on narrow mobile viewport', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 640);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await _pumpStatistics(
+      tester,
+      healthRecords: [
+        _healthRecord(id: 'h1', date: DateTime(2026, 8, 28), weight: 54.2),
+      ],
+    );
+
+    final dateTextFinder = find.text('08.28');
+    expect(dateTextFinder, findsOneWidget);
+
+    final dateText = tester.widget<Text>(dateTextFinder);
+    expect(dateText.maxLines, 1);
+    expect(dateText.softWrap, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Weight same values do not crash chart', (tester) async {
     await _pumpStatistics(
       tester,

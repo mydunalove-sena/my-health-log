@@ -34,6 +34,7 @@ class DuplicateMedicationLogException implements Exception {
 
 abstract class MedicationStorage {
   Future<List<Medication>> fetchActiveMedications();
+  Future<List<Medication>> fetchAllMedications();
   Future<List<MedicationLog>> fetchLogsForDate(DateTime date);
   Future<List<MedicationLog>> fetchAllLogs();
   Future<List<PrnMedicationLog>> fetchPrnLogsForDate(DateTime date);
@@ -144,6 +145,48 @@ class MedicationService extends ChangeNotifier {
     String medicationId,
   ) {
     return _storage.fetchDoseHistory(medicationId);
+  }
+
+  Future<MedicationHistoryDay> historyForDate(DateTime date) async {
+    final currentDate = _normalize(date);
+    final medications = await _storage.fetchAllMedications();
+    final medicationsById = {for (final item in medications) item.id: item};
+    final scheduledLogs = await _storage.fetchLogsForDate(currentDate);
+    final prnLogs = await _storage.fetchPrnLogsForDate(currentDate);
+    final prnLinks = await _storage.fetchAllPrnSymptomLinks();
+
+    final scheduledEntries = [
+      for (final log in scheduledLogs)
+        MedicationHistoryScheduledEntry(
+          medicationName:
+              medicationsById[log.medicationId]?.name ?? log.medicationId,
+          log: log,
+        ),
+    ]..sort((a, b) {
+      final slotCompare = a.log.timeSlot.index.compareTo(b.log.timeSlot.index);
+      if (slotCompare != 0) return slotCompare;
+      return a.medicationName.compareTo(b.medicationName);
+    });
+
+    final prnEntries = [
+      for (final log in prnLogs)
+        MedicationHistoryPrnEntry(
+          medicationName:
+              medicationsById[log.medicationId]?.name ?? log.medicationId,
+          log: log,
+          symptomDefinitionIds: [
+            for (final link in prnLinks)
+              if (link.prnMedicationLogId == log.id)
+                link.symptomDefinitionId,
+          ],
+        ),
+    ];
+
+    return MedicationHistoryDay(
+      date: currentDate,
+      scheduledEntries: scheduledEntries,
+      prnEntries: prnEntries,
+    );
   }
 
   MedicationLog? logFor(
@@ -345,6 +388,9 @@ class MedicationService extends ChangeNotifier {
 
   Future<List<MedicationLog>> allLogsForTest() => _storage.fetchAllLogs();
 
+  Future<List<Medication>> allMedicationsForTest() =>
+      _storage.fetchAllMedications();
+
   Future<List<PrnMedicationLog>> allPrnLogsForTest() =>
       _storage.fetchAllPrnLogs();
 
@@ -425,6 +471,57 @@ class MedicationService extends ChangeNotifier {
       DateTime(date.year, date.month, date.day);
 }
 
+class MedicationHistoryDay {
+  const MedicationHistoryDay({
+    required this.date,
+    required this.scheduledEntries,
+    required this.prnEntries,
+  });
+
+  final DateTime date;
+  final List<MedicationHistoryScheduledEntry> scheduledEntries;
+  final List<MedicationHistoryPrnEntry> prnEntries;
+
+  bool get isEmpty => scheduledEntries.isEmpty && prnEntries.isEmpty;
+}
+
+class MedicationHistoryScheduledEntry {
+  const MedicationHistoryScheduledEntry({
+    required this.medicationName,
+    required this.log,
+  });
+
+  final String medicationName;
+  final MedicationLog log;
+
+  bool get isTaken => log.isTaken;
+  bool get hasDoseSnapshot => log.displayDoseSnapshot != null;
+
+  String get statusLabel =>
+      log.isTaken ? '\uBCF5\uC6A9 \uC644\uB8CC' : '\uBBF8\uBCF5\uC6A9 \uAE30\uB85D';
+
+  String get doseLabel {
+    if (!log.isTaken) {
+      return '\uBCF5\uC6A9\uD558\uC9C0 \uC54A\uC74C';
+    }
+    return log.displayDoseSnapshot ?? '\uBCF5\uC6A9\uB7C9 \uAE30\uB85D \uC5C6\uC74C';
+  }
+}
+
+class MedicationHistoryPrnEntry {
+  const MedicationHistoryPrnEntry({
+    required this.medicationName,
+    required this.log,
+    required this.symptomDefinitionIds,
+  });
+
+  final String medicationName;
+  final PrnMedicationLog log;
+  final List<String> symptomDefinitionIds;
+
+  String get doseLabel => log.displayDose ?? '\uBCF5\uC6A9\uB7C9 \uAE30\uB85D \uC5C6\uC74C';
+}
+
 class SqfliteMedicationStorage implements MedicationStorage {
   static const _medicationsTable = 'medications';
   static const _logsTable = 'medication_logs';
@@ -453,6 +550,13 @@ class SqfliteMedicationStorage implements MedicationStorage {
       whereArgs: [1],
       orderBy: 'createdAt ASC',
     );
+    return rows.map(Medication.fromMap).toList();
+  }
+
+  @override
+  Future<List<Medication>> fetchAllMedications() async {
+    final db = await _db;
+    final rows = await db.query(_medicationsTable, orderBy: 'createdAt ASC');
     return rows.map(Medication.fromMap).toList();
   }
 
@@ -647,6 +751,9 @@ class InMemoryMedicationStorage implements MedicationStorage {
   Future<List<Medication>> fetchActiveMedications() async {
     return _medications.where((item) => item.isActive).toList();
   }
+
+  @override
+  Future<List<Medication>> fetchAllMedications() async => List.of(_medications);
 
   @override
   Future<List<MedicationLog>> fetchLogsForDate(DateTime date) async {

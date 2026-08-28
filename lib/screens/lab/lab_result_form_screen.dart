@@ -278,7 +278,7 @@ class _LabResultFormScreenState extends State<LabResultFormScreen> {
         ),
       ),
     );
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(result);
   }
 
   Future<void> _delete() async {

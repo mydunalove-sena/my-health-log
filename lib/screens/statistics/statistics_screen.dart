@@ -510,15 +510,17 @@ class _ValueRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Row(
-        children: [
-          SizedBox(
-            width: 56,
-            child: Text(
-              _formatShortDate(date),
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: AppColors.secondaryText),
+          children: [
+            SizedBox(
+              width: 64,
+              child: Text(
+                _formatShortDate(date),
+                maxLines: 1,
+                softWrap: false,
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: AppColors.secondaryText),
+              ),
             ),
-          ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(

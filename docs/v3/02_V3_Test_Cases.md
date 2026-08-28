@@ -210,6 +210,111 @@
 
 P1-3 did not change backup/restore production code. Android backup/restore was not repeated for P1-3; backupVersion 4 round-trip was covered by automated regression.
 
+## V3.0.1 HOT FIX
+
+### Lab Result CRUD UX
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V3-HF-LAB-TC-01 | Lab detail | Open a lab-date detail screen | Each result row shows an explicit edit action |
+| V3-HF-LAB-TC-02 | Lab detail | Open a lab-date detail screen | Each result row shows an explicit delete action |
+| V3-HF-LAB-TC-03 | Lab edit | Enter edit from a result row/action | Existing lab name, value, unit, and date are preserved |
+| V3-HF-LAB-TC-04 | Lab edit | Change a result saved for today to a past date | Save succeeds |
+| V3-HF-LAB-TC-05 | Lab list | Save a date change | Result appears under the new date group |
+| V3-HF-LAB-TC-06 | Lab delete | Cancel delete confirmation | Original result remains |
+| V3-HF-LAB-TC-07 | Lab delete | Confirm delete | Target result is removed |
+| V3-HF-LAB-TC-08 | Lab delete | Delete the last result in a date group | Empty date group/detail does not remain |
+| V3-HF-LAB-TC-09 | Lab add | Save a past-date result from main `+` | App opens the saved date detail |
+| V3-HF-LAB-TC-10 | Lab add | Add another result from detail `+ 검사 항목 추가` | The detail date is used as the initial date |
+| V3-HF-LAB-TC-11 | Lab grouping | Save multiple results on the same date | Results are grouped together on that date |
+
+### Medication History
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V3-HF-MED-TC-01 | Navigation | Open today's medication screen | `기록` entry point opens medication history |
+| V3-HF-MED-TC-02 | History | View past medication history | Records are shown by date |
+| V3-HF-MED-TC-03 | Scheduled history | Stored taken scheduled log exists | Taken status is displayed |
+| V3-HF-MED-TC-04 | Scheduled history | Compare no log with stored `isTaken == false` log | Missing log is not treated as false; stored false is shown as a saved missed-dose record |
+| V3-HF-MED-TC-05 | Scheduled history | Medication has no stored log on a date | No synthetic missed-dose history row is created |
+| V3-HF-MED-TC-06 | Scheduled history | Historical dose snapshot exists | Snapshot dose is displayed |
+| V3-HF-MED-TC-07 | Scheduled history | Current medication dose changes after a stored taken log | Historical snapshot remains unchanged |
+| V3-HF-MED-TC-08 | Legacy scheduled log | Stored scheduled log has no snapshot | Current medication dose is not used as fallback historical dose |
+| V3-HF-MED-TC-09 | Inactive medication | Historical log references inactive/soft-deleted medication | Medication name is still resolved from all medication rows |
+| V3-HF-MED-TC-10 | PRN history | PRN log exists | Actual taken time is displayed |
+| V3-HF-MED-TC-11 | PRN history | PRN log has stored dose value/unit | Actual stored dose is displayed |
+| V3-HF-MED-TC-12 | PRN symptoms | PRN log has related symptom links | Related symptoms are displayed neutrally |
+| V3-HF-MED-TC-13 | PRN history | PRN log has no related symptom links | Log still displays normally |
+| V3-HF-MED-TC-14 | PRN history | Multiple PRN logs exist on the same date | Each PRN log is shown separately |
+| V3-HF-MED-TC-15 | Regression | Open medication history and return to today | Today's medication screen state is unchanged |
+
+### Statistics Date Display
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V3-HF-STAT-TC-01 | Statistics list | View weight statistics on a narrow mobile viewport | `MM.dd` date such as `08.28` stays on one line |
+| V3-HF-STAT-TC-02 | Shared row regression | Use weight, blood pressure, and lab value lists | Shared value-row date display applies to all three lists |
+| V3-HF-STAT-TC-03 | Scope | View statistics chart | Chart and x-axis date rendering are unchanged |
+
+### V3.0.1 Automated QA
+
+- `flutter analyze`: PASS, No issues found.
+- Lab focused tests, `flutter test test/lab_result_test.dart`: 18 PASS, 0 FAIL.
+- Medication History focused tests, `flutter test test/medication_history_test.dart`: 7 PASS, 0 FAIL.
+- Statistics focused tests, `flutter test test/statistics_test.dart`: 27 PASS, 0 FAIL.
+- Medication/PRN/Snapshot/Backup regression bundle: 71 PASS, 0 FAIL.
+- Full regression, `flutter test`: 183 PASS, 0 FAIL.
+- During test stabilization, the Lab DatePicker widget helper initially selected a day without pressing OK/confirmation. This was a test automation issue, not a production app functional bug. After the helper fix, lab focused tests passed 18/18.
+
+### V3.0.1 Android Device QA
+
+- Device: SM-S918N, Android 16, device ID R3CW201RKMP.
+- Result: 20 PASS, 0 FAIL, 8 BLOCKED.
+- Confirmed app functional failure count: 0.
+- QA used a pre-run DB snapshot and restored the DB after testing.
+- QA301 test data residual check: PASS, no QA301 data remained after restore.
+
+| ID | Scenario | Result |
+|---|---|---|
+| QA-LAUNCH-01 | Launch / force-stop / relaunch for 3 cycles | PASS |
+| QA-LAB-01 | Lab screen and detail display | PASS |
+| QA-LAB-02 | Explicit edit/delete actions in lab detail | PASS |
+| QA-LAB-03 | Main `+` saves past-date lab result and opens saved-date detail | PASS |
+| QA-LAB-04 | Detail `+ 검사 항목 추가` keeps the same date and supports consecutive same-date entry | PASS |
+| QA-LAB-05 | Lab edit form preserves existing values | PASS |
+| QA-LAB-06 | Lab date change recalculates groups | PASS |
+| QA-LAB-07 | Duplicate validation on device | BLOCKED - automation/data-safety limitation |
+| QA-LAB-08 | Delete cancel keeps lab result | PASS |
+| QA-LAB-09 | Delete confirm removes lab result | PASS |
+| QA-LAB-10 | Last QA lab group is removed; no empty group remains | PASS |
+| QA-MED-01 | Today's medication screen shows `기록` and `관리` | PASS |
+| QA-MED-02 | Medication history is read-only | PASS |
+| QA-MED-03 | No-log empty-date device setup | BLOCKED - automation/data-safety limitation |
+| QA-MED-04 | Existing scheduled history displays stored status and dose text | PASS |
+| QA-MED-05 | Scheduled dose-change snapshot device setup | BLOCKED - automation/data-safety limitation |
+| QA-MED-06 | Existing stored `isTaken == false` displays as a saved missed-dose record | PASS |
+| QA-MED-07 | Inactive medication history device setup | BLOCKED - automation/data-safety limitation |
+| QA-MED-08 | PRN actual log device setup | BLOCKED - automation/data-safety limitation |
+| QA-MED-09 | PRN symptom link device setup | BLOCKED - automation/data-safety limitation |
+| QA-MED-10 | PRN no-symptom device setup | BLOCKED - automation/data-safety limitation |
+| QA-MED-11 | Multiple PRN logs device setup | BLOCKED - automation/data-safety limitation |
+| QA-MED-12 | Medication history lookup does not alter today's medication state | PASS |
+| QA-PERSIST-01 | Persistence/relaunch after QA data operations | PASS |
+| QA-LOGCAT-01 | App logcat fatal/ANR check | PASS |
+| QA-RESTORE-01 | Pre-QA DB snapshot and post-QA DB restore | PASS |
+
+### V3.0.1 Additional Android Statistics Check
+
+This check is recorded separately from the strengthened device QA count above. The strengthened device QA result remains 20 PASS, 0 FAIL, 8 BLOCKED.
+
+- Device: SM-S918N, Android 16.
+
+| ID | Scenario | Result |
+|---|---|---|
+| QA-STAT-DATE-01 | Weight statistics list date displays on one line | PASS |
+| QA-STAT-DATE-02 | Blood pressure statistics list date displays on one line | PASS |
+| QA-STAT-DATE-03 | Lab statistics list date displays on one line | PASS |
+
 ## Regression
 
 | ID | Area | Scenario | Expected |

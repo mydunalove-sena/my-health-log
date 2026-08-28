@@ -497,3 +497,97 @@ Release APK generation passed for the verified V3 code state.
 - Prepared official release version `3.0.0+4` for GitHub Release `v3.0.0`.
 - Kept databaseVersion 7 and backupVersion 4 unchanged.
 - No feature, dependency, DB schema, or backup format change was included.
+
+## 2026-08-28 - V3.0.1 HOT FIX
+
+### Requirement
+
+V3.0.1 addresses immediate V3.0.0 real-use friction without expanding into V3.1.0 scope. The hot fix makes lab-result edit/delete actions visible, improves same-date lab entry after saving, adds read-only medication history lookup for stored scheduled and PRN logs, and fixes statistics list date wrapping on real Android devices.
+
+### Implementation
+
+- Lab date detail rows now expose explicit `수정` and `삭제` actions.
+- Existing lab row-tap edit behavior remains available.
+- Lab edit form date changes remain supported.
+- Lab delete confirmation remains in place.
+- Deleting the final result for a date removes the empty date group/detail state.
+- Main lab `+` new-save flow opens the saved date's detail screen.
+- Detail `+ 검사 항목 추가` keeps the detail date as the initial date for consecutive same-date entry.
+- Added a `기록` entry point on today's medication screen while preserving `관리`.
+- Added a separate read-only medication history screen.
+- Medication history displays actually stored scheduled logs and PRN logs only.
+- Missing scheduled logs are not fabricated as missed-dose history.
+- Stored scheduled `isTaken == false` logs are displayed as saved missed-dose records.
+- Scheduled historical dose uses the stored dose snapshot when present.
+- Legacy scheduled logs without snapshots do not fall back to the current medication dose.
+- Historical medication-name lookup can use inactive/soft-deleted medication rows through an all-medications read path.
+- PRN history uses stored `takenAt`, `doseValue`, and `doseUnit`.
+- PRN related symptoms are resolved through existing `prn_symptom_links` and shown neutrally.
+- No past medication edit/delete workflow was added.
+- No medical causality, effect, risk, diagnosis, or medication-advice interpretation was added.
+- Statistics value-list dates now keep the existing `MM.dd` format on one line.
+- The shared `_ValueRow` date display fix applies to weight, blood pressure, and lab statistics lists.
+- Statistics chart and x-axis date rendering were not changed.
+- No V3.1.0 features were added.
+
+### Compatibility
+
+- databaseVersion remains 7.
+- backupVersion remains 4.
+- DB schema unchanged.
+- Backup payload unchanged.
+- Existing V3.0.0 data compatibility preserved.
+
+### Automated QA
+
+- `flutter analyze`: PASS, No issues found.
+- Lab focused tests, `flutter test test/lab_result_test.dart`: 18 PASS, 0 FAIL.
+- Medication History focused tests, `flutter test test/medication_history_test.dart`: 7 PASS, 0 FAIL.
+- Statistics focused tests, `flutter test test/statistics_test.dart`: 27 PASS, 0 FAIL.
+- Medication/PRN/Snapshot/Backup regression bundle: 71 PASS, 0 FAIL.
+- Full regression, `flutter test`: 183 PASS, 0 FAIL.
+- A Lab DatePicker widget-test helper initially failed because it selected the day but did not press OK/confirmation. This was a test automation issue, not a production app bug. After the helper was fixed, the lab focused suite passed 18/18.
+
+### Android Device QA
+
+- Device: SM-S918N, Android 16, device ID R3CW201RKMP.
+- Result: 20 PASS, 0 FAIL, 8 BLOCKED.
+- Confirmed app functional failure count: 0.
+- Launch / force-stop / relaunch 3 cycles passed.
+- Lab screen/detail, explicit edit/delete actions, past-date save-to-detail navigation, same-date consecutive entry, edit value preservation, date-change group recalculation, delete cancel, delete confirm, and final QA group removal passed.
+- Today's medication screen `기록`/`관리` entry points passed.
+- Medication history read-only behavior passed.
+- Existing scheduled history display passed.
+- Existing stored `isTaken == false` saved missed-dose display passed.
+- Medication history lookup did not alter today's medication screen state.
+- Persistence/relaunch passed.
+- App logcat showed no confirmed app FATAL EXCEPTION or ANR.
+- Pre-QA DB snapshot passed.
+- Post-QA DB restore passed.
+- QA301 test data residual check passed; no QA301 data remained after restore.
+
+### Additional Android Statistics Check
+
+This was a separate real-device confirmation after the strengthened device QA above. The strengthened device QA count remains 20 PASS, 0 FAIL, 8 BLOCKED.
+
+- Device: SM-S918N, Android 16.
+- Weight statistics list date displayed on one line: PASS.
+- Blood pressure statistics list date displayed on one line: PASS.
+- Lab statistics list date displayed on one line: PASS.
+
+### Android Device QA Blocked Items
+
+The following items were recorded as BLOCKED, not FAIL, because protecting real user data prevented broad medication create/dose-change/soft-delete and PRN fixture setup through live-device automation:
+
+- Lab duplicate device automation.
+- Medication no-log empty-date device setup.
+- Scheduled dose-change snapshot device setup.
+- Inactive medication history device setup.
+- PRN actual log device setup.
+- PRN symptom link device setup.
+- PRN no-symptom device setup.
+- Multiple PRN logs device setup.
+
+### Result
+
+V3.0.1 HOT FIX passed automated regression and Android device QA with no confirmed functional failures. V3.0.1 keeps databaseVersion 7, backupVersion 4, the existing DB schema, and the existing backup payload unchanged.

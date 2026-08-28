@@ -71,12 +71,15 @@ class LabScreen extends StatelessWidget {
   }
 
   Future<void> _openForm(BuildContext context, {DateTime? initialDate}) async {
-    await Navigator.of(context).push(
+    final saved = await Navigator.of(context).push<LabResult>(
       MaterialPageRoute(
         builder: (_) =>
             LabResultFormScreen(service: service, initialDate: initialDate),
       ),
     );
+    if (context.mounted && saved != null) {
+      await _openDetail(context, saved.date);
+    }
   }
 
   Future<void> _openDetail(BuildContext context, DateTime date) async {
@@ -125,6 +128,7 @@ class LabResultDetailScreen extends StatelessWidget {
                     icon: Icons.science_outlined,
                     message: '\uAC80\uC0AC \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.',
                     action: PrimaryButton(
+                      key: const Key('lab-detail-add-button'),
                       label: '+ \uAC80\uC0AC \uD56D\uBAA9 \uCD94\uAC00',
                       onPressed: () => _openForm(context),
                     ),
@@ -143,6 +147,9 @@ class LabResultDetailScreen extends StatelessWidget {
                             key: ValueKey('lab-result-${results[i].id}'),
                             result: results[i],
                             onTap: () => _openForm(context, result: results[i]),
+                            onEdit: () =>
+                                _openForm(context, result: results[i]),
+                            onDelete: () => _deleteResult(context, results[i]),
                           ),
                           if (i != results.length - 1)
                             const Divider(height: 1, color: AppColors.border),
@@ -152,6 +159,7 @@ class LabResultDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   PrimaryButton(
+                    key: const Key('lab-detail-add-button'),
                     label: '+ \uAC80\uC0AC \uD56D\uBAA9 \uCD94\uAC00',
                     onPressed: () => _openForm(context),
                   ),
@@ -165,7 +173,7 @@ class LabResultDetailScreen extends StatelessWidget {
   }
 
   Future<void> _openForm(BuildContext context, {LabResult? result}) async {
-    await Navigator.of(context).push(
+    final saved = await Navigator.of(context).push<LabResult>(
       MaterialPageRoute(
         builder: (_) => LabResultFormScreen(
           service: service,
@@ -174,6 +182,48 @@ class LabResultDetailScreen extends StatelessWidget {
         ),
       ),
     );
+    if (!context.mounted) {
+      return;
+    }
+    if (service.resultsForDate(date).isEmpty) {
+      Navigator.of(context).pop();
+      return;
+    }
+    if (saved != null && saved.dateKey != LabResult.formatDateKey(date)) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _deleteResult(BuildContext context, LabResult result) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          '\uAC80\uC0AC \uACB0\uACFC\uB97C \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?',
+        ),
+        content: const Text(
+          '\uC0AD\uC81C\uD55C \uAE30\uB85D\uC740 \uBCF5\uAD6C\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('\uCDE8\uC18C'),
+          ),
+          TextButton(
+            key: const Key('lab-detail-confirm-delete-button'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(
+              '\uC0AD\uC81C',
+              style: TextStyle(color: AppColors.error),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (shouldDelete != true) {
+      return;
+    }
+    await service.delete(result.id);
     if (context.mounted && service.resultsForDate(date).isEmpty) {
       Navigator.of(context).pop();
     }
@@ -246,10 +296,18 @@ class _LabDateGroupCard extends StatelessWidget {
 }
 
 class _LabResultRow extends StatelessWidget {
-  const _LabResultRow({super.key, required this.result, required this.onTap});
+  const _LabResultRow({
+    super.key,
+    required this.result,
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final LabResult result;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -257,26 +315,52 @@ class _LabResultRow extends StatelessWidget {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    result.testName,
-                    style: Theme.of(context).textTheme.bodyLarge,
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        result.testName,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        result.displayValue,
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: AppColors.secondaryText),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(
-                    result.displayValue,
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: AppColors.secondaryText),
-                  ),
-                ],
-              ),
+                ),
+                const Icon(Icons.chevron_right, color: AppColors.secondaryText),
+              ],
             ),
-            const Icon(Icons.chevron_right, color: AppColors.secondaryText),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  key: ValueKey('lab-edit-${result.id}'),
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('\uC218\uC815'),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                TextButton.icon(
+                  key: ValueKey('lab-delete-${result.id}'),
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text(
+                    '\uC0AD\uC81C',
+                    style: TextStyle(color: AppColors.error),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),

@@ -36,6 +36,11 @@ class MedicationScreen extends StatelessWidget {
             title: const Text('오늘의 복약'),
             actions: [
               TextButton(
+                key: const Key('medication-history-button'),
+                onPressed: () => _openHistory(context),
+                child: const Text('\uAE30\uB85D'),
+              ),
+              TextButton(
                 onPressed: () => _openList(context),
                 child: const Text('관리'),
               ),
@@ -109,6 +114,18 @@ class MedicationScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _openHistory(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MedicationHistoryScreen(
+          service: service,
+          symptomService: symptomService,
+          symptomDefinitions: symptomService?.definitions ?? const [],
+        ),
+      ),
+    );
+  }
+
   Future<void> _openForm(BuildContext context) async {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => MedicationFormScreen(service: service)),
@@ -126,6 +143,284 @@ class MedicationScreen extends StatelessWidget {
           symptomService: symptomService,
           medication: medication,
         ),
+      ),
+    );
+  }
+}
+
+class MedicationHistoryScreen extends StatefulWidget {
+  const MedicationHistoryScreen({
+    super.key,
+    required this.service,
+    this.symptomService,
+    this.symptomDefinitions = const [],
+  });
+
+  final MedicationService service;
+  final SymptomService? symptomService;
+  final List<SymptomDefinition> symptomDefinitions;
+
+  @override
+  State<MedicationHistoryScreen> createState() =>
+      _MedicationHistoryScreenState();
+}
+
+class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
+  late DateTime _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _selectedDate = DateTime(now.year, now.month, now.day);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      key: const Key('medication-history-screen'),
+      appBar: AppBar(title: const Text('\uBCF5\uC57D \uAE30\uB85D')),
+      body: SafeArea(
+        child: FutureBuilder<MedicationHistoryDay>(
+          future: widget.service.historyForDate(_selectedDate),
+          builder: (context, snapshot) {
+            final day = snapshot.data;
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.sm,
+                AppSpacing.md,
+                AppSpacing.xxl,
+              ),
+              children: [
+                _HistoryDateField(date: _selectedDate, onTap: _pickDate),
+                const SizedBox(height: AppSpacing.md),
+                if (snapshot.connectionState != ConnectionState.done)
+                  const Center(child: CircularProgressIndicator())
+                else if (day == null || day.isEmpty)
+                  EmptyState(
+                    icon: Icons.history,
+                    message:
+                        '\uC800\uC7A5\uB41C \uBCF5\uC57D \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.',
+                    action: const SizedBox.shrink(),
+                  )
+                else ...[
+                  if (day.scheduledEntries.isNotEmpty) ...[
+                    Text(
+                      '\uC815\uAE30 \uBCF5\uC57D',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _HistorySection(
+                      children: [
+                        for (final entry in day.scheduledEntries)
+                          _ScheduledHistoryRow(entry: entry),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
+                  if (day.prnEntries.isNotEmpty) ...[
+                    Text(
+                      '\uD544\uC694 \uC2DC \uBCF5\uC57D',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _HistorySection(
+                      children: [
+                        for (final entry in day.prnEntries)
+                          _PrnHistoryRow(
+                            entry: entry,
+                            symptomNames: _symptomNamesFor(entry),
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate.isAfter(today) ? today : _selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: today,
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = DateTime(picked.year, picked.month, picked.day);
+      });
+    }
+  }
+
+  List<String> _symptomNamesFor(MedicationHistoryPrnEntry entry) {
+    final names = <String>[];
+    for (final id in entry.symptomDefinitionIds) {
+      final name = _symptomNameFor(id);
+      if (name != null) {
+        names.add(name);
+      }
+    }
+    return names;
+  }
+
+  String? _symptomNameFor(String id) {
+    final fromService = widget.symptomService?.definitionById(id);
+    if (fromService != null) {
+      return fromService.name;
+    }
+    for (final definition in widget.symptomDefinitions) {
+      if (definition.id == id) {
+        return definition.name;
+      }
+    }
+    return null;
+  }
+}
+
+class _HistoryDateField extends StatelessWidget {
+  const _HistoryDateField({required this.date, required this.onTap});
+
+  final DateTime date;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: const Key('medication-history-date-field'),
+      borderRadius: BorderRadius.circular(AppRadius.input),
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: '\uB0A0\uC9DC',
+          filled: true,
+          fillColor: AppColors.surface,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadius.input),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(child: Text(_formatDate(date))),
+            const Icon(Icons.arrow_drop_down, color: AppColors.secondaryText),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HistorySection extends StatelessWidget {
+  const _HistorySection({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            children[i],
+            if (i != children.length - 1)
+              const Divider(height: 1, color: AppColors.border),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ScheduledHistoryRow extends StatelessWidget {
+  const _ScheduledHistoryRow({required this.entry});
+
+  final MedicationHistoryScheduledEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      key: ValueKey('med-history-scheduled-${entry.log.id}'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  entry.medicationName,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+              ),
+              Text(
+                entry.statusLabel,
+                key: ValueKey('med-history-status-${entry.log.id}'),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: entry.isTaken ? AppColors.success : AppColors.error,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            '${entry.log.timeSlot.label} \u00B7 ${entry.doseLabel}',
+            key: ValueKey('med-history-dose-${entry.log.id}'),
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: AppColors.secondaryText),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrnHistoryRow extends StatelessWidget {
+  const _PrnHistoryRow({required this.entry, required this.symptomNames});
+
+  final MedicationHistoryPrnEntry entry;
+  final List<String> symptomNames;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      key: ValueKey('med-history-prn-${entry.log.id}'),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            entry.medicationName,
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            '${_formatTime(entry.log.takenAt)} \u00B7 ${entry.doseLabel}',
+            key: ValueKey('med-history-prn-dose-${entry.log.id}'),
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: AppColors.secondaryText),
+          ),
+          if (symptomNames.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xxs),
+            Text(
+              '\uAD00\uB828 \uC99D\uC0C1: ${symptomNames.join(' \u00B7 ')}',
+              key: ValueKey('med-history-prn-symptoms-${entry.log.id}'),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AppColors.secondaryText),
+            ),
+          ],
+        ],
       ),
     );
   }

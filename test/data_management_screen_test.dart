@@ -251,6 +251,9 @@ class _MutableMedicationStorage implements MedicationStorage {
   }
 
   @override
+  Future<List<Medication>> fetchAllMedications() async => List.of(_medications);
+
+  @override
   Future<List<MedicationLog>> fetchLogsForDate(DateTime date) async {
     final dateKey = MedicationLog.formatDateKey(date);
     return _logs.where((item) => item.dateKey == dateKey).toList();
