@@ -132,6 +132,132 @@ void main() {
     expect(find.text('\uC624\uB298\uC758 \uBCF5\uC57D'), findsOneWidget);
   });
 
+  testWidgets('home shows all scheduled medication grouped by time slot', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final medications = [
+      _medication(
+        id: 'med-1',
+        name: '\uC544\uCE68\uC57D1',
+        dose: '1\uC815',
+        evening: false,
+      ),
+      _medication(
+        id: 'med-2',
+        name: '\uC544\uCE68\uC57D2',
+        dose: null,
+        evening: false,
+      ),
+      _medication(
+        id: 'med-3',
+        name: '\uC810\uC2EC\uC57D',
+        dose: '2mg',
+        morning: false,
+        lunch: true,
+        evening: false,
+      ),
+      _medication(
+        id: 'med-4',
+        name: '\uC800\uB141\uC57D',
+        dose: '3ml',
+        morning: false,
+        evening: true,
+      ),
+      _medication(
+        id: 'med-5',
+        name: '\uCDE8\uCE68\uC804\uC57D',
+        dose: '4\uC815',
+        morning: false,
+        evening: false,
+        bedtime: true,
+      ),
+    ];
+    final medService = await _medService(medications: medications);
+    await medService.toggleTaken(
+      medication: medications[2],
+      timeSlot: MedicationTimeSlot.lunch,
+    );
+
+    await tester.pumpWidget(
+      MyHealthLogApp(
+        healthRecordService: await _service(records: [_record()]),
+        medicationService: medService,
+        labResultService: await _labService(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('\uC544\uCE68'), findsOneWidget);
+    expect(find.text('\uC810\uC2EC'), findsOneWidget);
+    expect(find.text('\uC800\uB141'), findsOneWidget);
+    expect(find.text('\uCDE8\uCE68 \uC804'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('\uC544\uCE68')).dy,
+      lessThan(tester.getTopLeft(find.text('\uC810\uC2EC')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('\uC810\uC2EC')).dy,
+      lessThan(tester.getTopLeft(find.text('\uC800\uB141')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('\uC800\uB141')).dy,
+      lessThan(tester.getTopLeft(find.text('\uCDE8\uCE68 \uC804')).dy),
+    );
+    for (final medication in medications) {
+      expect(find.text(medication.name), findsOneWidget);
+    }
+    expect(find.text('1\uC815 \u00B7 \uBBF8\uBCF5\uC6A9'), findsOneWidget);
+    expect(find.text('\uBBF8\uBCF5\uC6A9'), findsOneWidget);
+    expect(find.text('2mg \u00B7 \uBCF5\uC6A9 \uC644\uB8CC'), findsOneWidget);
+    expect(find.textContaining('\uC544\uCE68 \u00B7'), findsNothing);
+    expect(find.textContaining('\uC810\uC2EC \u00B7'), findsNothing);
+
+    await tester.ensureVisible(find.text('\uCDE8\uCE68\uC804\uC57D'));
+    await tester.ensureVisible(find.text('\uBCF5\uC57D \uD655\uC778'));
+
+    expect(find.text('\uCDE8\uCE68\uC804\uC57D'), findsOneWidget);
+    expect(find.text('\uBCF5\uC57D \uD655\uC778'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('home hides empty medication time slot groups', (tester) async {
+    final medService = await _medService(
+      medications: [
+        _medication(
+          id: 'med-1',
+          name: '\uC544\uCE68\uC57D',
+          dose: '1\uC815',
+          evening: false,
+        ),
+        _medication(
+          id: 'med-2',
+          name: '\uCDE8\uCE68\uC804\uC57D',
+          dose: '1\uC815',
+          morning: false,
+          evening: false,
+          bedtime: true,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MyHealthLogApp(
+        healthRecordService: await _service(records: [_record()]),
+        medicationService: medService,
+        labResultService: await _labService(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('\uC544\uCE68'), findsOneWidget);
+    expect(find.text('\uCDE8\uCE68 \uC804'), findsOneWidget);
+    expect(find.text('\uC810\uC2EC'), findsNothing);
+    expect(find.text('\uC800\uB141'), findsNothing);
+  });
+
   testWidgets('bottom navigation stays visible on home', (tester) async {
     final service = await _service();
     await tester.pumpWidget(
@@ -354,16 +480,24 @@ HealthRecord _record({
   );
 }
 
-Medication _medication() {
+Medication _medication({
+  String id = 'med-1',
+  String name = '\uD0C0\uD06C\uB85C\uBCA8',
+  String? dose = '1\uC815',
+  bool morning = true,
+  bool lunch = false,
+  bool evening = true,
+  bool bedtime = false,
+}) {
   final now = DateTime.now();
   return Medication(
-    id: 'med-1',
-    name: '\uD0C0\uD06C\uB85C\uBCA8',
-    dose: '1\uC815',
-    morning: true,
-    lunch: false,
-    evening: true,
-    bedtime: false,
+    id: id,
+    name: name,
+    dose: dose,
+    morning: morning,
+    lunch: lunch,
+    evening: evening,
+    bedtime: bedtime,
     isActive: true,
     createdAt: now,
     updatedAt: now,

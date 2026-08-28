@@ -48,18 +48,19 @@ class HomeScreen extends StatelessWidget {
                   ? const [
                       _HomeMedicationItem(
                         name: '\uC544\uCE68\uC57D',
-                        detail: '\uC544\uCE68 \u00B7 \uBCF5\uC6A9 \uC644\uB8CC',
+                        detail: '\uBCF5\uC6A9 \uC644\uB8CC',
                         isTaken: true,
+                        timeSlot: MedicationTimeSlot.morning,
                       ),
                       _HomeMedicationItem(
                         name: '\uC800\uB141\uC57D',
-                        detail: '\uC800\uB141 \u00B7 \uBBF8\uBCF5\uC6A9',
+                        detail: '\uBBF8\uBCF5\uC6A9',
                         isTaken: false,
+                        timeSlot: MedicationTimeSlot.evening,
                       ),
                     ]
                   : const <_HomeMedicationItem>[]
             : medService.todayDoseItems
-                  .take(3)
                   .map(_HomeMedicationItem.fromDoseItem)
                   .toList();
         return _HomeContent(
@@ -96,7 +97,6 @@ class HomeScreen extends StatelessWidget {
         final items = medService == null
             ? const <_HomeMedicationItem>[]
             : medService.todayDoseItems
-                  .take(3)
                   .map(_HomeMedicationItem.fromDoseItem)
                   .toList();
         return _HomeContent(
@@ -394,6 +394,10 @@ class _MedicationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final groupedItems = {
+      for (final slot in MedicationTimeSlot.values)
+        slot: items.where((item) => item.timeSlot == slot).toList(),
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -407,8 +411,14 @@ class _MedicationSection extends StatelessWidget {
               border: Border.all(color: AppColors.border),
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final item in items) _MedicationSummaryRow(item: item),
+                for (final slot in MedicationTimeSlot.values)
+                  if (groupedItems[slot]!.isNotEmpty)
+                    _MedicationTimeSlotGroup(
+                      timeSlot: slot,
+                      items: groupedItems[slot]!,
+                    ),
               ],
             ),
           ),
@@ -428,6 +438,36 @@ class _MedicationSection extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _MedicationTimeSlotGroup extends StatelessWidget {
+  const _MedicationTimeSlotGroup({
+    required this.timeSlot,
+    required this.items,
+  });
+
+  final MedicationTimeSlot timeSlot;
+  final List<_HomeMedicationItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: Text(
+              timeSlot.label,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+          for (final item in items) _MedicationSummaryRow(item: item),
+        ],
+      ),
     );
   }
 }
@@ -478,11 +518,13 @@ class _HomeMedicationItem {
     required this.name,
     required this.detail,
     required this.isTaken,
+    required this.timeSlot,
   });
 
   final String name;
   final String detail;
   final bool isTaken;
+  final MedicationTimeSlot timeSlot;
 
   factory _HomeMedicationItem.fromDoseItem(MedicationDoseItem item) {
     final state = item.isTaken
@@ -491,11 +533,15 @@ class _HomeMedicationItem {
     final displayedDose = item.isTaken
         ? item.log?.displayDoseSnapshot
         : item.medication.displayDose;
-    final dose = displayedDose == null ? '' : ' \u00B7 $displayedDose';
+    final detailParts = [
+      ?displayedDose,
+      state,
+    ];
     return _HomeMedicationItem(
       name: item.medication.name,
-      detail: '${item.timeSlot.label}$dose \u00B7 $state',
+      detail: detailParts.join(' \u00B7 '),
       isTaken: item.isTaken,
+      timeSlot: item.timeSlot,
     );
   }
 }

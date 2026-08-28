@@ -47,12 +47,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(
-        '\uC544\uCE68 \u00B7 0.75\uC815 \u00B7 \uBCF5\uC6A9 \uC644\uB8CC',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('\uC544\uCE68'), findsOneWidget);
+    expect(find.text('0.75\uC815 \u00B7 \uBCF5\uC6A9 \uC644\uB8CC'), findsOneWidget);
     expect(find.textContaining('1mg'), findsNothing);
     expect(find.textContaining('복용 완료'), findsOneWidget);
   });
