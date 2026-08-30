@@ -427,6 +427,33 @@ class PrnMedicationLog {
       ? null
       : '${Medication.formatDoseValue(doseValue!)}${doseUnit!.label}';
 
+  PrnMedicationLog copyWith({
+    String? id,
+    String? medicationId,
+    DateTime? date,
+    DateTime? takenAt,
+    double? doseValue,
+    bool clearDoseValue = false,
+    MedicationDoseUnit? doseUnit,
+    bool clearDoseUnit = false,
+    String? note,
+    bool clearNote = false,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return PrnMedicationLog(
+      id: id ?? this.id,
+      medicationId: medicationId ?? this.medicationId,
+      date: date ?? this.date,
+      takenAt: takenAt ?? this.takenAt,
+      doseValue: clearDoseValue ? null : doseValue ?? this.doseValue,
+      doseUnit: clearDoseUnit ? null : doseUnit ?? this.doseUnit,
+      note: clearNote ? null : note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
   Map<String, Object?> toMap() => {
     'id': id,
     'medicationId': medicationId,

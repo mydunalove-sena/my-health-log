@@ -24,10 +24,7 @@ class MedicationScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge([
-        service,
-        ?symptomService,
-      ]),
+      animation: Listenable.merge([service, ?symptomService]),
       builder: (context, _) {
         final items = service.todayDoseItems;
         final prnMedications = service.activePrnMedications;
@@ -195,13 +192,18 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
               children: [
                 _HistoryDateField(date: _selectedDate, onTap: _pickDate),
                 const SizedBox(height: AppSpacing.md),
+                PrimaryButton(
+                  key: const Key('med-history-add-missing-button'),
+                  label: '누락 복약 추가',
+                  onPressed: _openMissingLogTypeDialog,
+                ),
+                const SizedBox(height: AppSpacing.md),
                 if (snapshot.connectionState != ConnectionState.done)
                   const Center(child: CircularProgressIndicator())
                 else if (day == null || day.isEmpty)
                   EmptyState(
                     icon: Icons.history,
-                    message:
-                        '\uC800\uC7A5\uB41C \uBCF5\uC57D \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.',
+                    message: '\uC800\uC7A5\uB41C \uBCF5\uC57D \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.',
                     action: const SizedBox.shrink(),
                   )
                 else ...[
@@ -214,7 +216,15 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
                     _HistorySection(
                       children: [
                         for (final entry in day.scheduledEntries)
-                          _ScheduledHistoryRow(entry: entry),
+                          _ScheduledHistoryRow(
+                            entry: entry,
+                            onEdit: entry.medication == null
+                                ? null
+                                : () => _openScheduledCorrection(
+                                    entry.medication!,
+                                    existingLog: entry.log,
+                                  ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.lg),
@@ -231,6 +241,14 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
                           _PrnHistoryRow(
                             entry: entry,
                             symptomNames: _symptomNamesFor(entry),
+                            onEdit: entry.medication == null
+                                ? null
+                                : () => _openPrnCorrection(
+                                    entry.medication!,
+                                    existingLog: entry.log,
+                                    symptomDefinitionIds:
+                                        entry.symptomDefinitionIds,
+                                  ),
                           ),
                       ],
                     ),
@@ -258,6 +276,101 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
         _selectedDate = DateTime(picked.year, picked.month, picked.day);
       });
     }
+  }
+
+  Future<void> _openMissingLogTypeDialog() async {
+    final scheduled = widget.service.activeScheduledMedications;
+    final prn = widget.service.activePrnMedications;
+    final type = await showDialog<_MissingMedicationLogType>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('누락 복약 추가'),
+        children: [
+          if (scheduled.isNotEmpty)
+            SimpleDialogOption(
+              key: const Key('med-history-add-scheduled-option'),
+              onPressed: () =>
+                  Navigator.of(context)
+                      .pop(_MissingMedicationLogType.scheduled),
+              child: const Text('정기 복약'),
+            ),
+          if (prn.isNotEmpty)
+            SimpleDialogOption(
+              key: const Key('med-history-add-prn-option'),
+              onPressed: () =>
+                  Navigator.of(context).pop(_MissingMedicationLogType.prn),
+              child: const Text('필요 시 복약'),
+            ),
+        ],
+      ),
+    );
+    if (type == null || !mounted) return;
+    if (type == _MissingMedicationLogType.scheduled) {
+      final medication = await _chooseMedication(scheduled);
+      if (medication != null) {
+        await _openScheduledCorrection(medication);
+      }
+      return;
+    }
+    final medication = await _chooseMedication(prn);
+    if (medication != null) {
+      await _openPrnCorrection(medication);
+    }
+  }
+
+  Future<Medication?> _chooseMedication(List<Medication> medications) {
+    return showDialog<Medication>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('약 선택'),
+        children: [
+          for (final medication in medications)
+            SimpleDialogOption(
+              key: ValueKey('med-history-pick-${medication.id}'),
+              onPressed: () => Navigator.of(context).pop(medication),
+              child: Text(medication.name),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openScheduledCorrection(
+    Medication medication, {
+    MedicationLog? existingLog,
+  }) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _ScheduledMedicationLogFormScreen(
+          service: widget.service,
+          medication: medication,
+          selectedDate: _selectedDate,
+          existingLog: existingLog,
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openPrnCorrection(
+    Medication medication, {
+    PrnMedicationLog? existingLog,
+    List<String> symptomDefinitionIds = const [],
+  }) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PrnMedicationLogFormScreen(
+          service: widget.service,
+          symptomService: widget.symptomService,
+          medication: medication,
+          initialDate: _selectedDate,
+          existingLog: existingLog,
+          initialSymptomDefinitionIds: symptomDefinitionIds,
+          title: existingLog == null ? '누락 PRN 복용 추가' : 'PRN 복용 수정',
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
   }
 
   List<String> _symptomNamesFor(MedicationHistoryPrnEntry entry) {
@@ -343,10 +456,13 @@ class _HistorySection extends StatelessWidget {
   }
 }
 
+enum _MissingMedicationLogType { scheduled, prn }
+
 class _ScheduledHistoryRow extends StatelessWidget {
-  const _ScheduledHistoryRow({required this.entry});
+  const _ScheduledHistoryRow({required this.entry, this.onEdit});
 
   final MedicationHistoryScheduledEntry entry;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -380,6 +496,17 @@ class _ScheduledHistoryRow extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium
                 ?.copyWith(color: AppColors.secondaryText),
           ),
+          if (onEdit != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                key: ValueKey('med-history-edit-scheduled-${entry.log.id}'),
+                onPressed: onEdit,
+                child: const Text('수정'),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -387,10 +514,15 @@ class _ScheduledHistoryRow extends StatelessWidget {
 }
 
 class _PrnHistoryRow extends StatelessWidget {
-  const _PrnHistoryRow({required this.entry, required this.symptomNames});
+  const _PrnHistoryRow({
+    required this.entry,
+    required this.symptomNames,
+    this.onEdit,
+  });
 
   final MedicationHistoryPrnEntry entry;
   final List<String> symptomNames;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -420,8 +552,242 @@ class _PrnHistoryRow extends StatelessWidget {
                   ?.copyWith(color: AppColors.secondaryText),
             ),
           ],
+          if (onEdit != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                key: ValueKey('med-history-edit-prn-${entry.log.id}'),
+                onPressed: onEdit,
+                child: const Text('수정'),
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _ScheduledMedicationLogFormScreen extends StatefulWidget {
+  const _ScheduledMedicationLogFormScreen({
+    required this.service,
+    required this.medication,
+    required this.selectedDate,
+    this.existingLog,
+  });
+
+  final MedicationService service;
+  final Medication medication;
+  final DateTime selectedDate;
+  final MedicationLog? existingLog;
+
+  @override
+  State<_ScheduledMedicationLogFormScreen> createState() =>
+      _ScheduledMedicationLogFormScreenState();
+}
+
+class _ScheduledMedicationLogFormScreenState
+    extends State<_ScheduledMedicationLogFormScreen> {
+  late MedicationTimeSlot _timeSlot;
+  late bool _isTaken;
+  late TimeOfDay _takenTime;
+  String? _formError;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existingLog;
+    _timeSlot = existing?.timeSlot ?? widget.medication.timeSlots.first;
+    _isTaken = existing?.isTaken ?? true;
+    _takenTime = TimeOfDay.fromDateTime(
+      existing?.takenAt ?? _defaultTakenAt(widget.selectedDate),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.existingLog == null ? '정기 복약 추가' : '정기 복약 수정'),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            AppSpacing.sm,
+            AppSpacing.md,
+            AppSpacing.xxl,
+          ),
+          children: [
+            Text(
+              widget.medication.name,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              _formatDate(widget.selectedDate),
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: AppColors.secondaryText),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            DropdownButtonFormField<MedicationTimeSlot>(
+              key: const Key('scheduled-correction-slot-field'),
+              initialValue: _timeSlot,
+              decoration: _inputDecoration(labelText: '복용 시간대'),
+              items: [
+                for (final slot in widget.medication.timeSlots)
+                  DropdownMenuItem(value: slot, child: Text(slot.label)),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _timeSlot = value);
+                }
+              },
+            ),
+            const SizedBox(height: AppSpacing.md),
+            SwitchListTile(
+              key: const Key('scheduled-correction-taken-switch'),
+              value: _isTaken,
+              title: const Text('복용 완료'),
+              onChanged: (value) => setState(() => _isTaken = value),
+            ),
+            if (_isTaken) ...[
+              const SizedBox(height: AppSpacing.md),
+              _HistoryActionField(
+                key: const Key('scheduled-correction-time-field'),
+                label: '실제 복용 시간',
+                value: MaterialLocalizations.of(context)
+                    .formatTimeOfDay(_takenTime),
+                onTap: _pickTakenTime,
+              ),
+            ],
+            if (_formError != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                _formError!,
+                style: const TextStyle(color: AppColors.error, fontSize: 14),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.xl),
+            PrimaryButton(
+              key: const Key('scheduled-correction-save-button'),
+              label: '저장',
+              onPressed: _save,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickTakenTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _takenTime,
+    );
+    if (picked != null) {
+      setState(() {
+        _takenTime = picked;
+        _formError = null;
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() => _formError = null);
+    final takenAt = _isTaken
+        ? DateTime(
+            widget.selectedDate.year,
+            widget.selectedDate.month,
+            widget.selectedDate.day,
+            _takenTime.hour,
+            _takenTime.minute,
+          )
+        : null;
+    try {
+      await widget.service.saveScheduledCorrection(
+        medication: widget.medication,
+        date: widget.selectedDate,
+        timeSlot: _timeSlot,
+        isTaken: _isTaken,
+        takenAt: takenAt,
+      );
+    } on FuturePrnMedicationDateException {
+      setState(() => _formError = '미래 날짜에는 저장할 수 없습니다.');
+      return;
+    } on FuturePrnMedicationTimeException {
+      setState(() => _formError = '미래 시간에는 저장할 수 없습니다.');
+      return;
+    }
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  DateTime _defaultTakenAt(DateTime date) {
+    final now = DateTime.now();
+    final normalizedToday = DateTime(now.year, now.month, now.day);
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    if (normalizedDate == normalizedToday) {
+      return now;
+    }
+    return DateTime(date.year, date.month, date.day, 9);
+  }
+
+  InputDecoration _inputDecoration({String? labelText}) {
+    return InputDecoration(
+      labelText: labelText,
+      filled: true,
+      fillColor: AppColors.surface,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.input),
+      ),
+    );
+  }
+}
+
+class _HistoryActionField extends StatelessWidget {
+  const _HistoryActionField({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodyLarge),
+        const SizedBox(height: AppSpacing.xs),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.input),
+          child: InputDecorator(
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: AppColors.surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.input),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(child: Text(value)),
+                const Icon(
+                  Icons.arrow_drop_down,
+                  color: AppColors.secondaryText,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -714,7 +1080,7 @@ class _PrnMedicationRow extends StatelessWidget {
           OutlinedButton(
             key: ValueKey('prn-record-${medication.id}'),
             onPressed: onRecord,
-            child: const Text('복용 기록'),
+            child: Text(logs.isEmpty ? '복용' : '추가 복용'),
           ),
         ],
       ),

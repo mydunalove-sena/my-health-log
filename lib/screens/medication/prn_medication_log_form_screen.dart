@@ -14,11 +14,19 @@ class PrnMedicationLogFormScreen extends StatefulWidget {
     required this.service,
     required this.medication,
     this.symptomService,
+    this.initialDate,
+    this.existingLog,
+    this.initialSymptomDefinitionIds = const [],
+    this.title,
   });
 
   final MedicationService service;
   final Medication medication;
   final SymptomService? symptomService;
+  final DateTime? initialDate;
+  final PrnMedicationLog? existingLog;
+  final List<String> initialSymptomDefinitionIds;
+  final String? title;
 
   @override
   State<PrnMedicationLogFormScreen> createState() =>
@@ -40,15 +48,27 @@ class _PrnMedicationLogFormScreenState
   void initState() {
     super.initState();
     final now = DateTime.now();
-    _selectedDate = DateTime(now.year, now.month, now.day);
-    _selectedTime = TimeOfDay.fromDateTime(now);
+    final existing = widget.existingLog;
+    final initialDate = widget.initialDate ?? existing?.date ?? now;
+    _selectedDate = DateTime(
+      initialDate.year,
+      initialDate.month,
+      initialDate.day,
+    );
+    _selectedTime = TimeOfDay.fromDateTime(existing?.takenAt ?? now);
     _doseController = TextEditingController(
-      text: widget.medication.doseValue == null
+      text: existing?.doseValue != null
+          ? Medication.formatDoseValue(existing!.doseValue!)
+          : widget.medication.doseValue == null
           ? ''
           : Medication.formatDoseValue(widget.medication.doseValue!),
     );
-    _doseUnit = widget.medication.doseUnit ?? MedicationDoseUnit.tablet;
-    _noteController = TextEditingController();
+    _doseUnit =
+        existing?.doseUnit ??
+        widget.medication.doseUnit ??
+        MedicationDoseUnit.tablet;
+    _noteController = TextEditingController(text: existing?.note ?? '');
+    _selectedSymptomDefinitionIds.addAll(widget.initialSymptomDefinitionIds);
   }
 
   @override
@@ -61,7 +81,7 @@ class _PrnMedicationLogFormScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('필요 시 약 복용 기록')),
+      appBar: AppBar(title: Text(widget.title ?? '필요 시 약 복용 기록')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(
@@ -174,7 +194,7 @@ class _PrnMedicationLogFormScreenState
                 const SizedBox(height: AppSpacing.xl),
                 PrimaryButton(
                   key: const Key('prn-save-button'),
-                  label: '복용 기록 저장',
+                  label: widget.existingLog == null ? '복용 저장' : '수정 저장',
                   onPressed: _save,
                 ),
               ],
@@ -239,14 +259,27 @@ class _PrnMedicationLogFormScreenState
     );
 
     try {
-      await widget.service.recordPrnTaken(
-        medication: widget.medication,
-        takenAt: takenAt,
-        doseValue: doseValue,
-        doseUnit: doseValue == null ? null : _doseUnit,
-        note: _noteController.text,
-        symptomDefinitionIds: _selectedSymptomDefinitionIds.toList(),
-      );
+      final existing = widget.existingLog;
+      if (existing == null) {
+        await widget.service.recordPrnTaken(
+          medication: widget.medication,
+          takenAt: takenAt,
+          doseValue: doseValue,
+          doseUnit: doseValue == null ? null : _doseUnit,
+          note: _noteController.text,
+          symptomDefinitionIds: _selectedSymptomDefinitionIds.toList(),
+        );
+      } else {
+        await widget.service.updatePrnLog(
+          medication: widget.medication,
+          existingLog: existing,
+          takenAt: takenAt,
+          doseValue: doseValue,
+          doseUnit: doseValue == null ? null : _doseUnit,
+          note: _noteController.text,
+          symptomDefinitionIds: _selectedSymptomDefinitionIds.toList(),
+        );
+      }
     } on FuturePrnMedicationDateException {
       setState(() => _formError = '미래 날짜에는 복용 기록을 저장할 수 없습니다.');
       return;

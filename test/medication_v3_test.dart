@@ -231,7 +231,7 @@ void main() {
 
       expect(find.text('필요 시 복용약'), findsOneWidget);
       expect(find.text('편두통약'), findsOneWidget);
-      expect(find.text('복용 기록'), findsOneWidget);
+      expect(find.text('복용'), findsOneWidget);
       expect(find.textContaining('미복용'), findsNothing);
     });
   });

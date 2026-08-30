@@ -906,3 +906,78 @@ Alias handling is an explicit compatibility rule for known lab names, not fuzzy 
 ### Result
 
 V3.4.0 lab input visibility and statistics alias handling passed automated QA, release APK build verification, Android User 0 update-install QA, existing-data preservation checks, alias statistics checks, and launch stability checks. V3.4.0 keeps databaseVersion 8, backupVersion 5, the existing `LabResult` schema, and the existing backup payload unchanged.
+
+## 2026-08-30 - V3.5.0 Medication History / PRN UX
+
+### Requirement
+
+V3.5.0 improves real medication use flows without changing stored database schemas:
+
+- Home should show PRN medication only when there is an actual PRN dose logged today.
+- PRN action labels should distinguish the first dose from additional doses.
+- Medication history should allow safe past scheduled and PRN log correction.
+
+PRN display remains a record of actual user-entered events. It is not a medication recommendation, missed-dose inference, cause/effect analysis, or dose guidance.
+
+### Implementation
+
+- Home now includes today PRN medication summaries only for PRN medications with actual logs on the current date.
+- Home PRN summaries show today's count and logged time values.
+- PRN medication action label is `복용` when there is no log today and `추가 복용` when one or more logs already exist today.
+- Additional PRN logging inserts a new `PrnMedicationLog` and does not overwrite previous logs.
+- Medication history now supports adding missing scheduled or PRN logs for a selected date.
+- Medication history now supports editing existing scheduled and PRN logs.
+- Past scheduled medication correction writes the selected date and selected `takenAt` instead of using the current-time today toggle path.
+- Scheduled medication update preserves existing `id` and `createdAt`, refreshes `updatedAt`, and does not fabricate a dose snapshot when a safe historical dose cannot be known.
+- PRN update preserves existing `id` and `createdAt`, refreshes `updatedAt`, and updates date, time, dose, unit, note, and selected related symptoms.
+- PRN related-symptom update replaces links only for the edited PRN log; links for other PRN logs are preserved.
+- Existing PRN symptom links remain neutral related-record links and do not change `symptom_records`.
+- No schema, migration, backup payload, application ID, or package-name change was added.
+
+### Compatibility
+
+- App version is `3.5.0+10`.
+- databaseVersion remains 8.
+- backupVersion remains 5.
+- Existing medication tables and PRN tables remain unchanged.
+- Existing backup payload remains unchanged.
+- No DB migration was added.
+
+### Automated QA
+
+- Focused V3.5 medication PRN/history tests: 15 PASS, 0 FAIL.
+- Related medication/history/PRN/backup regression bundle: 110 PASS, 0 FAIL.
+- Full regression, `flutter test`: 277 PASS, 0 FAIL.
+- `flutter analyze`: PASS, No issues found.
+- `git diff --check`: PASS.
+
+### Release APK
+
+- Command: `flutter build apk --release`.
+- Result: PASS.
+- APK: `build\app\outputs\flutter-apk\app-release.apk`.
+- APK metadata: package `com.example.my_health_log`, versionName `3.5.0`, versionCode `10`.
+- APK size: 54,591,261 bytes.
+- External verified copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.5.0.apk`.
+- SHA-256: `B2F82202DE98CE035B51107671792BEB835FEBE143395D0D45B6B29FD57DC99D`.
+
+### Android Device QA
+
+- Device: Samsung SM-S918N, Android 16.
+- Update install used `adb install --user 0 -r` over the existing User 0 package.
+- No uninstall, clear data, DB deletion, backup/restore, package-name change, or User 95 install was performed.
+- User 95 DUAL_APP package recurrence was not observed after update.
+- Existing 2026-02-03, 2026-05-12, and 2026-08-11 lab result groups remained visible after update.
+- Existing health records remained visible after update.
+- Existing medication screen remained reachable after update.
+- Existing symptom recording screen remained reachable after update.
+- Home showed today's actual PRN records under the PRN section, including today's count and logged times.
+- Medication history showed the missing-log action and scheduled edit action.
+- Scheduled edit form opened with the selected existing scheduled log data; no save was performed during smoke QA.
+- PRN edit form opened with the selected existing PRN log data and related symptom selection; no save was performed during smoke QA.
+- Launch / force-stop / relaunch 3 cycles passed.
+- Filtered logcat showed no app `FATAL EXCEPTION`.
+
+### Result
+
+V3.5.0 medication history and PRN UX passed automated QA, release APK build verification, Android User 0 update-install QA, existing-data preservation checks, PRN home/history smoke QA, and launch stability checks. V3.5.0 keeps databaseVersion 8, backupVersion 5, the existing DB schema, and the existing backup payload unchanged.

@@ -312,6 +312,9 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 - 검사 통계 chart 과거 -> 최신, 목록 최신 -> 과거
 - V3.4.0 검사 입력 숫자 field 가시성 개선
 - 검사 통계 HDL/P 표기 alias 정규화
+- V3.5.0 홈에서 오늘 실제 PRN 복용 기록 표시
+- PRN 복용 버튼 상태 문구 개선
+- 과거 정기/PRN 복약 기록 추가 및 수정
 
 ### V3 범위 제한
 
@@ -370,16 +373,30 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 - Fuzzy matching, 자동 의학 판정, 검사값 정상/위험 해석, unit conversion은 추가하지 않았습니다.
 - databaseVersion 8, backupVersion 5, LabResult DB schema를 유지하며 DB migration은 없습니다.
 
+### V3.5.0 Medication History / PRN Policy
+
+- 홈은 오늘 실제 저장된 PRN 복용 기록이 있을 때만 PRN 복용 요약을 표시합니다.
+- PRN 약이 등록되어 있어도 실제 복용 기록이 없으면 홈에서 미복용이나 권장 복용처럼 표시하지 않습니다.
+- PRN 버튼은 오늘 기록이 없으면 `복용`, 오늘 기록이 있으면 `추가 복용`으로 표시하며, 추가 복용은 기존 로그를 덮어쓰지 않고 새 PRN 로그를 저장합니다.
+- 복약 기록 화면에서 과거 정기 복약 기록을 추가/수정할 수 있습니다.
+- 과거 정기 복약 보정은 선택한 날짜와 실제 복용 시간을 보존하며, 현재 시각을 강제로 쓰는 today toggle 동작을 사용하지 않습니다.
+- 정기 복약 수정은 기존 `id`와 `createdAt`을 유지하고 `updatedAt`만 갱신합니다.
+- 안전한 과거 용량을 추정할 수 없는 경우 정기 복약 보정의 dose snapshot은 임의 생성하지 않습니다.
+- 과거 PRN 복용 기록을 수정할 수 있으며, 기존 `id`와 `createdAt`을 유지합니다.
+- PRN 관련 증상 수정은 편집 중인 PRN 로그의 link만 교체하고 다른 PRN 로그의 link는 변경하지 않습니다.
+- PRN 관련 증상 link는 중립적인 관련 기록이며, 원인/효과/복용량 추천을 의미하지 않습니다.
+- databaseVersion 8, backupVersion 5, 기존 medication/PRN DB schema와 backup payload를 유지하며 DB migration은 없습니다.
+
 ### V3 최종 검증 상태
 
 | Item | Result |
 | --- | --- |
 | `flutter analyze` | PASS: No issues found |
-| `flutter test` | PASS: 262/262 |
-| Focused V3.4.0 lab safety tests | PASS: 16/16 |
-| Android V3.4.0 update/install QA | PASS: confirmed app functional failures 0 |
+| `flutter test` | PASS: 277/277 |
+| Focused V3.5.0 medication PRN/history tests | PASS: 15/15 |
+| Android V3.5.0 update/install QA | PASS: confirmed app functional failures 0 |
 | Release APK build | PASS |
-| Release APK | `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.4.0.apk` |
+| Release APK | `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.5.0.apk` |
 | databaseVersion | 8 |
 | backupVersion | 5 |
 
@@ -409,12 +426,12 @@ V3 상세 요구사항, 테스트 케이스, 변경 이력은 `docs/v3/`에서 �
 
 ## Release
 
-- Current App Version: `3.4.0+9`
-- Current Code State: V3.4.0 local release build candidate from branch `v3`
-- Current Release Type: Local V3.4.0 Release APK build and Android User 0 update-install verification
+- Current App Version: `3.5.0+10`
+- Current Code State: V3.5.0 local release build candidate from branch `v3`
+- Current Release Type: Local V3.5.0 Release APK build and Android User 0 update-install verification
 - Current Release APK: `build\app\outputs\flutter-apk\app-release.apk`
-- Current Release APK Size: `54,476,573 bytes`
-- Current external APK copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.4.0.apk`
+- Current Release APK Size: `54,591,261 bytes`
+- Current external APK copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.5.0.apk`
 
 Latest public GitHub release remains V2:
 

@@ -70,6 +70,9 @@ class HomeScreen extends StatelessWidget {
             : medService.todayDoseItems
                   .map(_HomeMedicationItem.fromDoseItem)
                   .toList();
+        final prnItems = medService == null
+            ? const <_HomePrnMedicationItem>[]
+            : _HomePrnMedicationItem.fromService(medService);
         return _HomeContent(
           date: DateTime.now(),
           healthRecord: mockState?.hasHealthRecord ?? true
@@ -77,6 +80,7 @@ class HomeScreen extends StatelessWidget {
               : null,
           healthFieldVisibilityService: healthFieldVisibilityService,
           medicationItems: medicationItems,
+          prnMedicationItems: prnItems,
           exerciseRecords: const [],
           onOpenHealth: () {},
           onOpenMedication: onOpenMedication,
@@ -109,12 +113,16 @@ class HomeScreen extends StatelessWidget {
             : medService.todayDoseItems
                   .map(_HomeMedicationItem.fromDoseItem)
                   .toList();
+        final prnItems = medService == null
+            ? const <_HomePrnMedicationItem>[]
+            : _HomePrnMedicationItem.fromService(medService);
         final exerciseRecords = exService?.todayRecords ?? const [];
         return _HomeContent(
           date: DateTime.now(),
           healthRecord: todayRecord,
           healthFieldVisibilityService: healthFieldVisibilityService,
           medicationItems: items,
+          prnMedicationItems: prnItems,
           exerciseRecords: exerciseRecords,
           onOpenHealth: () async {
             if (todayRecord == null) {
@@ -182,6 +190,7 @@ class _HomeContent extends StatelessWidget {
     required this.healthRecord,
     this.healthFieldVisibilityService,
     required this.medicationItems,
+    required this.prnMedicationItems,
     required this.exerciseRecords,
     required this.onOpenHealth,
     this.onOpenMedication,
@@ -194,6 +203,7 @@ class _HomeContent extends StatelessWidget {
   final HealthRecord? healthRecord;
   final HealthFieldVisibilityService? healthFieldVisibilityService;
   final List<_HomeMedicationItem> medicationItems;
+  final List<_HomePrnMedicationItem> prnMedicationItems;
   final List<ExerciseRecord> exerciseRecords;
   final VoidCallback onOpenHealth;
   final VoidCallback? onOpenMedication;
@@ -243,6 +253,7 @@ class _HomeContent extends StatelessWidget {
               const SizedBox(height: AppSpacing.xl),
               _MedicationSection(
                 items: medicationItems,
+                prnItems: prnMedicationItems,
                 onOpenMedication: onOpenMedication,
                 onAddMedication: onAddMedication,
               ),
@@ -473,11 +484,13 @@ class _ExerciseSection extends StatelessWidget {
 class _MedicationSection extends StatelessWidget {
   const _MedicationSection({
     required this.items,
+    required this.prnItems,
     this.onOpenMedication,
     this.onAddMedication,
   });
 
   final List<_HomeMedicationItem> items;
+  final List<_HomePrnMedicationItem> prnItems;
   final VoidCallback? onOpenMedication;
   final VoidCallback? onAddMedication;
 
@@ -492,7 +505,7 @@ class _MedicationSection extends StatelessWidget {
       children: [
         const SectionHeader(title: '\uC624\uB298\uC758 \uBCF5\uC57D'),
         const SizedBox(height: AppSpacing.sm),
-        if (items.isNotEmpty) ...[
+        if (items.isNotEmpty || prnItems.isNotEmpty) ...[
           Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
@@ -508,6 +521,8 @@ class _MedicationSection extends StatelessWidget {
                       timeSlot: slot,
                       items: groupedItems[slot]!,
                     ),
+                if (prnItems.isNotEmpty)
+                  _HomePrnMedicationGroup(items: prnItems),
               ],
             ),
           ),
@@ -558,6 +573,69 @@ class _MedicationTimeSlotGroup extends StatelessWidget {
   }
 }
 
+class _HomePrnMedicationGroup extends StatelessWidget {
+  const _HomePrnMedicationGroup({required this.items});
+
+  final List<_HomePrnMedicationItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      key: const Key('home-prn-medication-group'),
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: Text(
+              '필요 시 복용',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+          for (final item in items) _HomePrnSummaryRow(item: item),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomePrnSummaryRow extends StatelessWidget {
+  const _HomePrnSummaryRow({required this.item});
+
+  final _HomePrnMedicationItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      key: ValueKey('home-prn-${item.medicationId}'),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.name, style: Theme.of(context).textTheme.bodyLarge),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  item.detail,
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: AppColors.secondaryText),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.check_circle, size: 20, color: AppColors.success),
+        ],
+      ),
+    );
+  }
+}
+
 class _MedicationSummaryRow extends StatelessWidget {
   const _MedicationSummaryRow({required this.item});
 
@@ -599,6 +677,46 @@ class _MedicationSummaryRow extends StatelessWidget {
   }
 }
 
+class _HomePrnMedicationItem {
+  const _HomePrnMedicationItem({
+    required this.medicationId,
+    required this.name,
+    required this.detail,
+  });
+
+  final String medicationId;
+  final String name;
+  final String detail;
+
+  static List<_HomePrnMedicationItem> fromService(MedicationService service) {
+    return [
+      for (final medication in service.activePrnMedications)
+        if (service.prnLogsForMedication(medication.id).isNotEmpty)
+          _HomePrnMedicationItem.fromLogs(
+            medication,
+            service.prnLogsForMedication(medication.id),
+          ),
+    ];
+  }
+
+  factory _HomePrnMedicationItem.fromLogs(
+    Medication medication,
+    List<PrnMedicationLog> logs,
+  ) {
+    final times = logs.map((log) => _formatTime(log.takenAt)).join(' / ');
+    final detailParts = [
+      ?medication.displayDose,
+      '복용 완료 · 오늘 ${logs.length}회',
+      times,
+    ];
+    return _HomePrnMedicationItem(
+      medicationId: medication.id,
+      name: medication.name,
+      detail: detailParts.join(' · '),
+    );
+  }
+}
+
 class _HomeMedicationItem {
   const _HomeMedicationItem({
     required this.name,
@@ -627,4 +745,10 @@ class _HomeMedicationItem {
       timeSlot: item.timeSlot,
     );
   }
+}
+
+String _formatTime(DateTime date) {
+  final hour = date.hour.toString().padLeft(2, '0');
+  final minute = date.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
 }

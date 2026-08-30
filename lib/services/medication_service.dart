@@ -58,6 +58,10 @@ abstract class MedicationStorage {
     PrnMedicationLog log, {
     List<PrnSymptomLink> symptomLinks = const [],
   });
+  Future<void> updatePrnMedicationLog(
+    PrnMedicationLog log, {
+    List<PrnSymptomLink> symptomLinks = const [],
+  });
   Future<void> deletePrnMedicationLog(String id);
 }
 
@@ -155,29 +159,33 @@ class MedicationService extends ChangeNotifier {
     final prnLogs = await _storage.fetchPrnLogsForDate(currentDate);
     final prnLinks = await _storage.fetchAllPrnSymptomLinks();
 
-    final scheduledEntries = [
-      for (final log in scheduledLogs)
-        MedicationHistoryScheduledEntry(
-          medicationName:
-              medicationsById[log.medicationId]?.name ?? log.medicationId,
-          log: log,
-        ),
-    ]..sort((a, b) {
-      final slotCompare = a.log.timeSlot.index.compareTo(b.log.timeSlot.index);
-      if (slotCompare != 0) return slotCompare;
-      return a.medicationName.compareTo(b.medicationName);
-    });
+    final scheduledEntries =
+        [
+          for (final log in scheduledLogs)
+            MedicationHistoryScheduledEntry(
+              medicationName:
+                  medicationsById[log.medicationId]?.name ?? log.medicationId,
+              medication: medicationsById[log.medicationId],
+              log: log,
+            ),
+        ]..sort((a, b) {
+          final slotCompare = a.log.timeSlot.index.compareTo(
+            b.log.timeSlot.index,
+          );
+          if (slotCompare != 0) return slotCompare;
+          return a.medicationName.compareTo(b.medicationName);
+        });
 
     final prnEntries = [
       for (final log in prnLogs)
         MedicationHistoryPrnEntry(
           medicationName:
               medicationsById[log.medicationId]?.name ?? log.medicationId,
+          medication: medicationsById[log.medicationId],
           log: log,
           symptomDefinitionIds: [
             for (final link in prnLinks)
-              if (link.prnMedicationLogId == log.id)
-                link.symptomDefinitionId,
+              if (link.prnMedicationLogId == log.id) link.symptomDefinitionId,
           ],
         ),
     ];
@@ -321,6 +329,68 @@ class MedicationService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<MedicationLog> saveScheduledCorrection({
+    required Medication medication,
+    required DateTime date,
+    required MedicationTimeSlot timeSlot,
+    required bool isTaken,
+    DateTime? takenAt,
+    DateTime? now,
+  }) async {
+    if (!medication.isScheduled) {
+      throw const InvalidPrnMedicationException();
+    }
+    if (!medication.isScheduledFor(timeSlot)) {
+      throw const EmptyMedicationTimeSlotException();
+    }
+
+    final currentNow = now ?? DateTime.now();
+    final currentDate = _normalize(currentNow);
+    final correctedDate = _normalize(date);
+    if (correctedDate.isAfter(currentDate)) {
+      throw const FuturePrnMedicationDateException();
+    }
+    if (isTaken) {
+      final actualTakenAt = takenAt;
+      if (actualTakenAt == null || _normalize(actualTakenAt) != correctedDate) {
+        throw const FuturePrnMedicationTimeException();
+      }
+      if (actualTakenAt.isAfter(currentNow)) {
+        throw const FuturePrnMedicationTimeException();
+      }
+    }
+
+    final matchingLogs = (await _storage.fetchLogsForDate(correctedDate))
+        .where(
+          (log) =>
+              log.medicationId == medication.id && log.timeSlot == timeSlot,
+        )
+        .toList();
+    final existing = matchingLogs.isEmpty ? null : matchingLogs.first;
+    final createdAt = existing?.createdAt ?? currentNow;
+    final next = MedicationLog(
+      id: existing?.id ?? 'medlog-${currentNow.microsecondsSinceEpoch}',
+      medicationId: medication.id,
+      date: correctedDate,
+      timeSlot: timeSlot,
+      isTaken: isTaken,
+      takenAt: isTaken ? takenAt : null,
+      doseSnapshot: null,
+      doseValueSnapshot: null,
+      doseUnitSnapshot: null,
+      createdAt: createdAt,
+      updatedAt: currentNow,
+    );
+
+    await _storage.upsertMedicationLog(next);
+    if (MedicationLog.formatDateKey(correctedDate) ==
+        MedicationLog.formatDateKey(_loadedDate)) {
+      _logsByKey[next.uniqueKey] = next;
+    }
+    notifyListeners();
+    return next;
+  }
+
   Future<PrnMedicationLog> recordPrnTaken({
     required Medication medication,
     required DateTime takenAt,
@@ -377,6 +447,67 @@ class MedicationService extends ChangeNotifier {
     _prnSymptomLinks.addAll(symptomLinks);
     notifyListeners();
     return log;
+  }
+
+  Future<PrnMedicationLog> updatePrnLog({
+    required Medication medication,
+    required PrnMedicationLog existingLog,
+    required DateTime takenAt,
+    double? doseValue,
+    MedicationDoseUnit? doseUnit,
+    String? note,
+    List<String> symptomDefinitionIds = const [],
+    DateTime? now,
+  }) async {
+    if (!medication.isPrn || existingLog.medicationId != medication.id) {
+      throw const InvalidPrnMedicationException();
+    }
+
+    final currentNow = now ?? DateTime.now();
+    final currentDate = _normalize(currentNow);
+    final takenDate = _normalize(takenAt);
+    if (takenDate.isAfter(currentDate)) {
+      throw const FuturePrnMedicationDateException();
+    }
+    if (takenAt.isAfter(currentNow)) {
+      throw const FuturePrnMedicationTimeException();
+    }
+    if (doseValue != null &&
+        (!doseValue.isFinite || doseValue <= 0 || doseUnit == null)) {
+      throw const InvalidMedicationDoseException();
+    }
+
+    final normalizedNote = note?.trim();
+    final next = existingLog.copyWith(
+      date: takenDate,
+      takenAt: takenAt,
+      doseValue: doseValue,
+      clearDoseValue: doseValue == null,
+      doseUnit: doseValue == null ? null : doseUnit,
+      clearDoseUnit: doseValue == null,
+      note: normalizedNote == null || normalizedNote.isEmpty
+          ? null
+          : normalizedNote,
+      clearNote: normalizedNote == null || normalizedNote.isEmpty,
+      updatedAt: currentNow,
+    );
+    final symptomLinks = _buildPrnSymptomLinks(
+      logId: next.id,
+      symptomDefinitionIds: symptomDefinitionIds,
+      createdAt: currentNow,
+    );
+
+    await _storage.updatePrnMedicationLog(next, symptomLinks: symptomLinks);
+    _prnLogsForLoadedDate.removeWhere((log) => log.id == next.id);
+    if (MedicationLog.formatDateKey(takenDate) ==
+        MedicationLog.formatDateKey(_loadedDate)) {
+      _prnLogsForLoadedDate.add(next);
+      _sortPrnLogs();
+    }
+    _prnSymptomLinks.removeWhere((link) => link.prnMedicationLogId == next.id);
+    _prnSymptomLinks.addAll(symptomLinks);
+    notifyListeners();
+    return next;
   }
 
   Future<void> deletePrnLog(String id) async {
@@ -488,38 +619,45 @@ class MedicationHistoryDay {
 class MedicationHistoryScheduledEntry {
   const MedicationHistoryScheduledEntry({
     required this.medicationName,
+    required this.medication,
     required this.log,
   });
 
   final String medicationName;
+  final Medication? medication;
   final MedicationLog log;
 
   bool get isTaken => log.isTaken;
   bool get hasDoseSnapshot => log.displayDoseSnapshot != null;
 
-  String get statusLabel =>
-      log.isTaken ? '\uBCF5\uC6A9 \uC644\uB8CC' : '\uBBF8\uBCF5\uC6A9 \uAE30\uB85D';
+  String get statusLabel => log.isTaken
+      ? '\uBCF5\uC6A9 \uC644\uB8CC'
+      : '\uBBF8\uBCF5\uC6A9 \uAE30\uB85D';
 
   String get doseLabel {
     if (!log.isTaken) {
       return '\uBCF5\uC6A9\uD558\uC9C0 \uC54A\uC74C';
     }
-    return log.displayDoseSnapshot ?? '\uBCF5\uC6A9\uB7C9 \uAE30\uB85D \uC5C6\uC74C';
+    return log.displayDoseSnapshot ??
+        '\uBCF5\uC6A9\uB7C9 \uAE30\uB85D \uC5C6\uC74C';
   }
 }
 
 class MedicationHistoryPrnEntry {
   const MedicationHistoryPrnEntry({
     required this.medicationName,
+    required this.medication,
     required this.log,
     required this.symptomDefinitionIds,
   });
 
   final String medicationName;
+  final Medication? medication;
   final PrnMedicationLog log;
   final List<String> symptomDefinitionIds;
 
-  String get doseLabel => log.displayDose ?? '\uBCF5\uC6A9\uB7C9 \uAE30\uB85D \uC5C6\uC74C';
+  String get doseLabel =>
+      log.displayDose ?? '\uBCF5\uC6A9\uB7C9 \uAE30\uB85D \uC5C6\uC74C';
 }
 
 class SqfliteMedicationStorage implements MedicationStorage {
@@ -715,6 +853,34 @@ class SqfliteMedicationStorage implements MedicationStorage {
   }
 
   @override
+  Future<void> updatePrnMedicationLog(
+    PrnMedicationLog log, {
+    List<PrnSymptomLink> symptomLinks = const [],
+  }) async {
+    final db = await _db;
+    await db.transaction((txn) async {
+      await txn.update(
+        _prnLogsTable,
+        log.toMap(),
+        where: 'id = ?',
+        whereArgs: [log.id],
+      );
+      await txn.delete(
+        _prnSymptomLinksTable,
+        where: 'prnMedicationLogId = ?',
+        whereArgs: [log.id],
+      );
+      for (final link in symptomLinks) {
+        await txn.insert(
+          _prnSymptomLinksTable,
+          link.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+    });
+  }
+
+  @override
   Future<void> deletePrnMedicationLog(String id) async {
     final db = await _db;
     await db.transaction((txn) async {
@@ -856,6 +1022,30 @@ class InMemoryMedicationStorage implements MedicationStorage {
     List<PrnSymptomLink> symptomLinks = const [],
   }) async {
     _prnLogs.add(log);
+    for (final link in symptomLinks) {
+      final exists = _prnSymptomLinks.any(
+        (item) =>
+            item.prnMedicationLogId == link.prnMedicationLogId &&
+            item.symptomDefinitionId == link.symptomDefinitionId,
+      );
+      if (!exists) {
+        _prnSymptomLinks.add(link);
+      }
+    }
+  }
+
+  @override
+  Future<void> updatePrnMedicationLog(
+    PrnMedicationLog log, {
+    List<PrnSymptomLink> symptomLinks = const [],
+  }) async {
+    final index = _prnLogs.indexWhere((item) => item.id == log.id);
+    if (index == -1) {
+      _prnLogs.add(log);
+    } else {
+      _prnLogs[index] = log;
+    }
+    _prnSymptomLinks.removeWhere((link) => link.prnMedicationLogId == log.id);
     for (final link in symptomLinks) {
       final exists = _prnSymptomLinks.any(
         (item) =>

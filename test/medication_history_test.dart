@@ -92,35 +92,38 @@ void main() {
       expect(inactive.doseLabel, '0.5\uC815');
     });
 
-    test('legacy scheduled snapshot does not fall back to current dose', () async {
-      final date = DateTime(2026, 8, 27);
-      final medication = _medication(
-        id: 'legacy-med',
-        name: 'Legacy med',
-        dose: '2mg',
-        doseValue: 2,
-        doseUnit: MedicationDoseUnit.mg,
-      );
-      final service = await _service(
-        medications: [medication],
-        logs: [
-          _scheduledLog(
-            id: 'legacy-log',
-            medicationId: medication.id,
-            date: date,
-            isTaken: true,
-          ),
-        ],
-      );
+    test(
+      'legacy scheduled snapshot does not fall back to current dose',
+      () async {
+        final date = DateTime(2026, 8, 27);
+        final medication = _medication(
+          id: 'legacy-med',
+          name: 'Legacy med',
+          dose: '2mg',
+          doseValue: 2,
+          doseUnit: MedicationDoseUnit.mg,
+        );
+        final service = await _service(
+          medications: [medication],
+          logs: [
+            _scheduledLog(
+              id: 'legacy-log',
+              medicationId: medication.id,
+              date: date,
+              isTaken: true,
+            ),
+          ],
+        );
 
-      final history = await service.historyForDate(date);
+        final history = await service.historyForDate(date);
 
-      expect(
-        history.scheduledEntries.single.doseLabel,
-        '\uBCF5\uC6A9\uB7C9 \uAE30\uB85D \uC5C6\uC74C',
-      );
-      expect(history.scheduledEntries.single.doseLabel, isNot('2mg'));
-    });
+        expect(
+          history.scheduledEntries.single.doseLabel,
+          '\uBCF5\uC6A9\uB7C9 \uAE30\uB85D \uC5C6\uC74C',
+        );
+        expect(history.scheduledEntries.single.doseLabel, isNot('2mg'));
+      },
+    );
 
     test('PRN history uses actual PRN log data and links by log id', () async {
       final date = DateTime(2026, 8, 27);
@@ -212,15 +215,20 @@ void main() {
   group('Medication history UI', () {
     testWidgets('opens from Medication Today screen', (tester) async {
       final service = await _service();
-      await tester.pumpWidget(MaterialApp(home: MedicationScreen(service: service)));
+      await tester.pumpWidget(
+        MaterialApp(home: MedicationScreen(service: service)),
+      );
 
       await tester.tap(find.byKey(const Key('medication-history-button')));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('medication-history-screen')), findsOneWidget);
+      expect(
+        find.byKey(const Key('medication-history-screen')),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('shows scheduled and PRN history without edit actions', (
+    testWidgets('shows scheduled and PRN history with edit actions', (
       tester,
     ) async {
       final date = DateTime.now();
@@ -274,8 +282,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('med-history-scheduled-taken-log')), findsOneWidget);
-      expect(find.byKey(const ValueKey('med-history-prn-prn-log')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('med-history-scheduled-taken-log')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('med-history-prn-prn-log')),
+        findsOneWidget,
+      );
       expect(find.text('History med'), findsOneWidget);
       expect(find.text('PRN med'), findsOneWidget);
       expect(find.textContaining('1mg'), findsOneWidget);
@@ -285,7 +299,7 @@ void main() {
         find.textContaining('\uAD00\uB828 \uC99D\uC0C1: Headache'),
         findsOneWidget,
       );
-      expect(find.text('\uC218\uC815'), findsNothing);
+      expect(find.text('\uC218\uC815'), findsNWidgets(2));
       expect(find.text('\uC0AD\uC81C'), findsNothing);
     });
   });

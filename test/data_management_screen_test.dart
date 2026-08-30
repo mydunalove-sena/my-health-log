@@ -363,6 +363,21 @@ class _MutableMedicationStorage implements MedicationStorage {
   }
 
   @override
+  Future<void> updatePrnMedicationLog(
+    PrnMedicationLog log, {
+    List<PrnSymptomLink> symptomLinks = const [],
+  }) async {
+    final index = _prnLogs.indexWhere((item) => item.id == log.id);
+    if (index == -1) {
+      _prnLogs.add(log);
+    } else {
+      _prnLogs[index] = log;
+    }
+    _prnSymptomLinks.removeWhere((item) => item.prnMedicationLogId == log.id);
+    _prnSymptomLinks.addAll(symptomLinks);
+  }
+
+  @override
   Future<void> deletePrnMedicationLog(String id) async {
     _prnSymptomLinks.removeWhere((item) => item.prnMedicationLogId == id);
     _prnLogs.removeWhere((item) => item.id == id);
