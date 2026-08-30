@@ -315,6 +315,7 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 - V3.5.0 홈에서 오늘 실제 PRN 복용 기록 표시
 - PRN 복용 버튼 상태 문구 개선
 - 과거 정기/PRN 복약 기록 추가 및 수정
+- V3.5.1 건강 기록 목록 수분/수면 표시 누락 수정
 
 ### V3 범위 제한
 
@@ -387,16 +388,26 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 - PRN 관련 증상 link는 중립적인 관련 기록이며, 원인/효과/복용량 추천을 의미하지 않습니다.
 - databaseVersion 8, backupVersion 5, 기존 medication/PRN DB schema와 backup payload를 유지하며 DB migration은 없습니다.
 
+### V3.5.1 Health Record List Hot Fix
+
+- 건강 기록 입력/수정 화면과 Home 카드에는 수분/수면 처리가 있었지만, 건강 기록 목록 카드에는 수분/수면 summary line이 누락되어 있었습니다.
+- 건강 기록 목록 카드에 수분과 수면을 체중, 혈압 다음 순서로 표시합니다.
+- 수분은 값이 있으면 천 단위 구분이 적용된 `mL` 단위로 표시하고, 값이 없으면 `기록 없음`으로 표시합니다.
+- 수면은 기존 double 표시 정책을 유지해 `시간` 단위로 표시하고, 값이 없으면 `기록 없음`으로 표시합니다.
+- 항목 표시 설정의 수분/수면 OFF/ON을 목록 카드에서도 동일하게 반영합니다.
+- 저장 로직, HealthRecord model/schema, Home health cards, Statistics, Backup payload는 변경하지 않았습니다.
+- databaseVersion 8, backupVersion 5를 유지하며 DB migration은 없습니다.
+
 ### V3 최종 검증 상태
 
 | Item | Result |
 | --- | --- |
 | `flutter analyze` | PASS: No issues found |
-| `flutter test` | PASS: 277/277 |
-| Focused V3.5.0 medication PRN/history tests | PASS: 15/15 |
-| Android V3.5.0 update/install QA | PASS: confirmed app functional failures 0 |
+| `flutter test` | PASS: 281/281 |
+| Focused V3.5.1 health display tests | PASS: 17/17 |
+| Android V3.5.1 update/install QA | PASS: confirmed app functional failures 0 |
 | Release APK build | PASS |
-| Release APK | `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.5.0.apk` |
+| Release APK | `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.5.1.apk` |
 | databaseVersion | 8 |
 | backupVersion | 5 |
 
@@ -426,12 +437,12 @@ V3 상세 요구사항, 테스트 케이스, 변경 이력은 `docs/v3/`에서 �
 
 ## Release
 
-- Current App Version: `3.5.0+10`
-- Current Code State: V3.5.0 local release build candidate from branch `v3`
-- Current Release Type: Local V3.5.0 Release APK build and Android User 0 update-install verification
+- Current App Version: `3.5.1+11`
+- Current Code State: V3.5.1 local release build candidate from branch `v3`
+- Current Release Type: Local V3.5.1 Release APK build and Android User 0 update-install verification
 - Current Release APK: `build\app\outputs\flutter-apk\app-release.apk`
-- Current Release APK Size: `54,591,261 bytes`
-- Current external APK copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.5.0.apk`
+- Current Release APK Size: `54,607,645 bytes`
+- Current external APK copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.5.1.apk`
 
 Latest public GitHub release remains V2:
 

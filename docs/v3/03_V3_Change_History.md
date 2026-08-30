@@ -981,3 +981,75 @@ PRN display remains a record of actual user-entered events. It is not a medicati
 ### Result
 
 V3.5.0 medication history and PRN UX passed automated QA, release APK build verification, Android User 0 update-install QA, existing-data preservation checks, PRN home/history smoke QA, and launch stability checks. V3.5.0 keeps databaseVersion 8, backupVersion 5, the existing DB schema, and the existing backup payload unchanged.
+
+## 2026-08-30 - V3.5.1 Health Record List Hot Fix
+
+### Confirmed Defect
+
+The health record form and Home summary already supported water intake and sleep hours, but the Health screen record-list cards only rendered weight, blood pressure, and condition.
+
+This was classified as a Health record list UI display omission, not a storage, schema, migration, or backup defect.
+
+### Implementation
+
+- Added water-intake summary display to each health record list card.
+- Added sleep-hours summary display to each health record list card.
+- Kept the existing list-card layout and `_SummaryLine` style.
+- Display order is weight, blood pressure, water, sleep, condition.
+- Water value uses the existing visibility flag and displays `mL`.
+- Water values are formatted with thousands separators, for example `1,500 mL`.
+- Missing water values display `기록 없음`.
+- Sleep value uses the existing visibility flag and displays `시간`.
+- Sleep values use the existing one-decimal double display policy, for example `6.5 시간`.
+- Missing sleep values display `기록 없음`.
+- Added stable keys for focused list-card water/sleep assertions.
+
+### Compatibility
+
+- App version is `3.5.1+11`.
+- databaseVersion remains 8.
+- backupVersion remains 5.
+- `HealthRecord` schema unchanged.
+- Existing backup payload unchanged.
+- No DB migration was added.
+- No health save/edit logic, Home health-card logic, Statistics, medication, lab, symptom, or backup behavior was changed.
+
+### Automated QA
+
+- Focused health display/visibility tests: 17 PASS, 0 FAIL.
+- Related health/future-date/widget regression bundle: 48 PASS, 0 FAIL.
+- Full regression, `flutter test`: 281 PASS, 0 FAIL.
+- `flutter analyze`: PASS, No issues found.
+- `git diff --check`: PASS.
+
+### Release APK
+
+- Command: `flutter build apk --release`.
+- Result: PASS.
+- APK: `build\app\outputs\flutter-apk\app-release.apk`.
+- APK metadata: package `com.example.my_health_log`, versionName `3.5.1`, versionCode `11`.
+- APK size: 54,607,645 bytes.
+- External verified copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.5.1.apk`.
+- SHA-256: `417AF8268EC642A4B37ADE1232B1962A4EEDE64181A1DDED21327FB7B0720A39`.
+
+### Android Device QA
+
+- Device: Samsung SM-S918N, Android 16.
+- Update install used `adb install --user 0 -r` over the existing User 0 package.
+- No uninstall, clear data, DB deletion, backup/restore, package-name change, or User 95 install was performed.
+- User 95 DUAL_APP package recurrence was not observed after update.
+- Existing health records remained visible after update.
+- Health record list cards displayed water and sleep values with `mL` and `시간` units.
+- Missing water values displayed `기록 없음`.
+- Water OFF in field visibility settings removed only the water summary line from the list.
+- Sleep OFF in field visibility settings removed only the sleep summary line from the list.
+- Water and sleep visibility were restored to ON after the smoke check.
+- Weight, blood pressure, and condition lines remained visible.
+- Tapping a record still opened the health record edit screen normally.
+- Home health cards remained visible after update.
+- Launch / force-stop / relaunch 3 cycles passed.
+- Filtered logcat showed no app `FATAL EXCEPTION`.
+
+### Result
+
+V3.5.1 health record list hotfix passed focused tests, related regression, full regression, static analysis, release APK build verification, Android User 0 update-install QA, list display/visibility smoke QA, and launch stability checks. V3.5.1 keeps databaseVersion 8, backupVersion 5, the existing DB schema, and the existing backup payload unchanged.

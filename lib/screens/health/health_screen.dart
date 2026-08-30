@@ -200,6 +200,18 @@ class _HealthRecordListItem extends StatelessWidget {
                         label: '혈압',
                         value: _bloodPressureText(record),
                       ),
+                    if (visibilityService?.waterIntakeVisible ?? true)
+                      _SummaryLine(
+                        key: ValueKey('health-record-water-${record.dateKey}'),
+                        label: '\uC218\uBD84',
+                        value: _waterText(record),
+                      ),
+                    if (visibilityService?.sleepHoursVisible ?? true)
+                      _SummaryLine(
+                        key: ValueKey('health-record-sleep-${record.dateKey}'),
+                        label: '\uC218\uBA74',
+                        value: _sleepText(record),
+                      ),
                     if (visibilityService?.conditionVisible ?? true)
                       _SummaryLine(
                         label: '컨디션',
@@ -238,13 +250,40 @@ class _HealthRecordListItem extends StatelessWidget {
     return '${record.systolicBloodPressure} / ${record.diastolicBloodPressure} mmHg';
   }
 
+  String _waterText(HealthRecord record) {
+    if (record.waterIntake == null) {
+      return '\uAE30\uB85D \uC5C6\uC74C';
+    }
+    return '${_formatInt(record.waterIntake!)} mL';
+  }
+
+  String _sleepText(HealthRecord record) {
+    if (record.sleepHours == null) {
+      return '\uAE30\uB85D \uC5C6\uC74C';
+    }
+    return '${_formatDouble(record.sleepHours!)} \uC2DC\uAC04';
+  }
+
+  String _formatInt(int value) {
+    final sign = value < 0 ? '-' : '';
+    final digits = value.abs().toString();
+    final buffer = StringBuffer();
+    for (var index = 0; index < digits.length; index += 1) {
+      if (index > 0 && (digits.length - index) % 3 == 0) {
+        buffer.write(',');
+      }
+      buffer.write(digits[index]);
+    }
+    return '$sign$buffer';
+  }
+
   String _formatDouble(double value) {
     return value.toStringAsFixed(1);
   }
 }
 
 class _SummaryLine extends StatelessWidget {
-  const _SummaryLine({required this.label, required this.value});
+  const _SummaryLine({super.key, required this.label, required this.value});
 
   final String label;
   final String value;

@@ -7,11 +7,14 @@ import 'package:my_health_log/models/health_record.dart';
 import 'package:my_health_log/models/home_mock_state.dart';
 import 'package:my_health_log/models/lab_result.dart';
 import 'package:my_health_log/screens/health/health_form_screen.dart';
+import 'package:my_health_log/screens/health/health_screen.dart';
 import 'package:my_health_log/screens/home/home_screen.dart';
 import 'package:my_health_log/screens/statistics/statistics_screen.dart';
+import 'package:my_health_log/services/exercise_service.dart';
 import 'package:my_health_log/services/health_field_visibility_service.dart';
 import 'package:my_health_log/services/health_record_service.dart';
 import 'package:my_health_log/services/lab_result_service.dart';
+import 'package:my_health_log/services/symptom_service.dart';
 
 void main() {
   setUp(() {
@@ -175,6 +178,110 @@ void main() {
     expect(find.byKey(const Key('home-sleep-card')), findsOneWidget);
     expect(find.byKey(const Key('home-condition-card')), findsOneWidget);
   });
+
+  testWidgets('shows water and sleep in the health record list', (
+    tester,
+  ) async {
+    final visibilityService = await _visibilityService();
+    final record = _healthRecord(waterIntake: 1500, sleepHours: 6.5);
+
+    await _pumpHealthScreen(
+      tester,
+      records: [record],
+      visibilityService: visibilityService,
+    );
+
+    expect(find.textContaining('\uC218\uBD84  1,500 mL'), findsOneWidget);
+    expect(
+      find.textContaining('\uC218\uBA74  6.5 \uC2DC\uAC04'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(ValueKey('health-record-water-${record.dateKey}')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(ValueKey('health-record-sleep-${record.dateKey}')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('shows empty water and sleep values in the health record list', (
+    tester,
+  ) async {
+    final record = _healthRecord(waterIntake: null, sleepHours: null);
+
+    await _pumpHealthScreen(tester, records: [record]);
+
+    expect(
+      find.textContaining('\uC218\uBD84  \uAE30\uB85D \uC5C6\uC74C'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('\uC218\uBA74  \uAE30\uB85D \uC5C6\uC74C'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('respects water and sleep visibility in the health record list', (
+    tester,
+  ) async {
+    final visibilityService = await _visibilityService();
+    final record = _healthRecord(waterIntake: 1500, sleepHours: 6.5);
+
+    await visibilityService.setVisible(
+      HealthFieldVisibilityKey.waterIntake,
+      false,
+    );
+    await _pumpHealthScreen(
+      tester,
+      records: [record],
+      visibilityService: visibilityService,
+    );
+
+    expect(find.textContaining('\uC218\uBD84  1,500 mL'), findsNothing);
+    expect(
+      find.textContaining('\uC218\uBA74  6.5 \uC2DC\uAC04'),
+      findsOneWidget,
+    );
+
+    await visibilityService.setVisible(
+      HealthFieldVisibilityKey.waterIntake,
+      true,
+    );
+    await visibilityService.setVisible(
+      HealthFieldVisibilityKey.sleepHours,
+      false,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('\uC218\uBD84  1,500 mL'), findsOneWidget);
+    expect(find.textContaining('\uC218\uBA74  6.5 \uC2DC\uAC04'), findsNothing);
+  });
+
+  testWidgets('keeps all visible health record summary fields and edit tap', (
+    tester,
+  ) async {
+    final record = _healthRecord(waterIntake: 1500, sleepHours: 6.5);
+
+    await _pumpHealthScreen(tester, records: [record]);
+
+    expect(find.textContaining('\uCCB4\uC911'), findsOneWidget);
+    expect(find.textContaining('\uD608\uC555'), findsOneWidget);
+    expect(find.textContaining('\uC218\uBD84  1,500 mL'), findsOneWidget);
+    expect(
+      find.textContaining('\uC218\uBA74  6.5 \uC2DC\uAC04'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('\uCEE8\uB514\uC158'), findsOneWidget);
+
+    await tester.tap(find.byKey(ValueKey('health-record-${record.dateKey}')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HealthFormScreen), findsOneWidget);
+    expect(find.byKey(const Key('health-water-field')), findsOneWidget);
+    expect(find.byKey(const Key('health-sleep-field')), findsOneWidget);
+  });
 }
 
 Future<HealthFieldVisibilityService> _visibilityService() async {
@@ -189,6 +296,43 @@ Future<HealthRecordService> _healthService({
   final service = HealthRecordService(InMemoryHealthRecordStorage(records));
   await service.load();
   return service;
+}
+
+Future<ExerciseService> _exerciseService(
+  HealthRecordService healthService,
+) async {
+  final service = ExerciseService(
+    InMemoryExerciseRecordStorage(),
+    healthService,
+  );
+  await service.load();
+  return service;
+}
+
+Future<SymptomService> _symptomService() async {
+  final service = SymptomService(InMemorySymptomStorage());
+  await service.load();
+  return service;
+}
+
+Future<void> _pumpHealthScreen(
+  WidgetTester tester, {
+  List<HealthRecord>? records,
+  HealthFieldVisibilityService? visibilityService,
+}) async {
+  final healthService = await _healthService(records: records);
+  await tester.pumpWidget(
+    MaterialApp(
+      home: HealthScreen(
+        service: healthService,
+        symptomService: await _symptomService(),
+        exerciseService: await _exerciseService(healthService),
+        healthFieldVisibilityService:
+            visibilityService ?? await _visibilityService(),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
 Future<LabResultService> _labService() async {
@@ -225,7 +369,10 @@ Future<void> _pumpStatistics(
   await tester.pumpAndSettle();
 }
 
-HealthRecord _healthRecord({int? waterIntake = 1200}) {
+HealthRecord _healthRecord({
+  int? waterIntake = 1200,
+  double? sleepHours = 6.5,
+}) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   return HealthRecord(
@@ -236,7 +383,7 @@ HealthRecord _healthRecord({int? waterIntake = 1200}) {
     diastolicBloodPressure: 80,
     waterIntake: waterIntake,
     steps: 6400,
-    sleepHours: 6.5,
+    sleepHours: sleepHours,
     condition: HealthCondition.normal,
     createdAt: today,
     updatedAt: today,
