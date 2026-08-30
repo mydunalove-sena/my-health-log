@@ -37,6 +37,7 @@ class StatisticsScreen extends StatefulWidget {
 class _StatisticsScreenState extends State<StatisticsScreen> {
   _StatsTab _selectedTab = _StatsTab.weight;
   String? _selectedLabTestName;
+  int? _selectedLabYear;
 
   @override
   Widget build(BuildContext context) {
@@ -99,9 +100,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       _StatsTab.lab => _LabStatsView(
         results: widget.labResultService.results,
         selectedTestName: _selectedLabTestName,
+        selectedYear: _selectedLabYear,
         onSelectedTestName: (name) {
           setState(() {
             _selectedLabTestName = name;
+          });
+        },
+        onSelectedYear: (year) {
+          setState(() {
+            _selectedLabYear = year;
           });
         },
         onOpenLab: widget.onOpenLab,
@@ -296,13 +303,17 @@ class _LabStatsView extends StatelessWidget {
   const _LabStatsView({
     required this.results,
     required this.selectedTestName,
+    required this.selectedYear,
     required this.onSelectedTestName,
+    required this.onSelectedYear,
     this.onOpenLab,
   });
 
   final List<LabResult> results;
   final String? selectedTestName;
+  final int? selectedYear;
   final ValueChanged<String?> onSelectedTestName;
+  final ValueChanged<int?> onSelectedYear;
   final VoidCallback? onOpenLab;
 
   @override
@@ -324,8 +335,19 @@ class _LabStatsView extends StatelessWidget {
     final selected = sortedNames.contains(selectedTestName)
         ? selectedTestName!
         : sortedNames.first;
+    final years = _availableYears(results);
+    final currentYear = DateTime.now().year;
+    final selectedLabYear = years.contains(selectedYear)
+        ? selectedYear!
+        : currentYear;
     final filtered =
-        results.where((result) => result.testName.trim() == selected).toList()
+        results
+            .where(
+              (result) =>
+                  result.testName.trim() == selected &&
+                  result.date.year == selectedLabYear,
+            )
+            .toList()
           ..sort((a, b) => a.date.compareTo(b.date));
     final unitSet = {for (final result in filtered) (result.unit ?? '').trim()};
     final hasMixedUnits = unitSet.length > 1;
@@ -354,11 +376,31 @@ class _LabStatsView extends StatelessWidget {
           ],
           onChanged: onSelectedTestName,
         ),
+        const SizedBox(height: AppSpacing.md),
+        Text('\uC5F0\uB3C4', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.xs),
+        DropdownButtonFormField<int>(
+          key: const Key('statistics-lab-year-dropdown'),
+          initialValue: selectedLabYear,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: AppColors.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.input),
+            ),
+          ),
+          items: [
+            for (final year in years)
+              DropdownMenuItem(value: year, child: Text(year.toString())),
+          ],
+          onChanged: onSelectedYear,
+        ),
         const SizedBox(height: AppSpacing.xl),
         if (filtered.isEmpty)
           _StatsEmptyState(
             icon: Icons.science_outlined,
-            message: '\uD574\uB2F9 \uAC80\uC0AC \uD56D\uBAA9\uC758 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.',
+            message:
+                '$selectedLabYear\uB144\uC5D0 \uD574\uB2F9 \uAC80\uC0AC \uD56D\uBAA9\uC758 \uAE30\uB85D\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.',
             buttonLabel: '\uAC80\uC0AC \uACB0\uACFC \uAE30\uB85D\uD558\uAE30',
             onPressed: onOpenLab,
           )
@@ -370,17 +412,31 @@ class _LabStatsView extends StatelessWidget {
                 : null,
             chart: hasMixedUnits
                 ? null
-                : _LineChart(
-                    series: [
-                      _ChartSeries(
-                        color: AppColors.primary,
-                        points: [
-                          for (final result in filtered)
-                            _ChartPoint(date: result.date, value: result.value),
-                        ],
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: math.max(
+                        MediaQuery.sizeOf(context).width -
+                            AppSpacing.md * 4 -
+                            2,
+                        filtered.length * 56.0,
                       ),
-                    ],
-                    axisFormat: _ChartAxisFormat.lab,
+                      child: _LineChart(
+                        series: [
+                          _ChartSeries(
+                            color: AppColors.primary,
+                            points: [
+                              for (final result in filtered)
+                                _ChartPoint(
+                                  date: result.date,
+                                  value: result.value,
+                                ),
+                            ],
+                          ),
+                        ],
+                        axisFormat: _ChartAxisFormat.lab,
+                      ),
+                    ),
                   ),
             children: [
               for (final result in filtered.reversed)
@@ -389,6 +445,14 @@ class _LabStatsView extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  List<int> _availableYears(List<LabResult> results) {
+    final years = {DateTime.now().year};
+    for (final result in results) {
+      years.add(result.date.year);
+    }
+    return years.toList()..sort((a, b) => b.compareTo(a));
   }
 }
 
@@ -510,17 +574,17 @@ class _ValueRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Row(
-          children: [
-            SizedBox(
-              width: 64,
-              child: Text(
-                _formatShortDate(date),
-                maxLines: 1,
-                softWrap: false,
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: AppColors.secondaryText),
-              ),
+        children: [
+          SizedBox(
+            width: 64,
+            child: Text(
+              _formatShortDate(date),
+              maxLines: 1,
+              softWrap: false,
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: AppColors.secondaryText),
             ),
+          ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(

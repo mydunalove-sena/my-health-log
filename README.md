@@ -305,6 +305,11 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 - 검사 단위 자동 적용
 - 검사일별 다중 입력과 전체 저장
 - 기존 검사 결과 prefill/update
+- V3.3.0 검사 통계 연도별 전체 조회
+- 검사 통계 기본 범위 현재 연도
+- 검사 항목 + 연도 기준 filtering
+- 최근 N건 제한 없는 해당 연도 전체 결과 표시
+- 검사 통계 chart 과거 -> 최신, 목록 최신 -> 과거
 
 ### V3 범위 제한
 
@@ -340,16 +345,29 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 - 기존 Statistics와 Backup은 V3.1.0 구조를 유지합니다.
 - databaseVersion 8, backupVersion 5, LabResult DB schema를 유지하며 DB migration은 없습니다.
 
+### V3.3.0 Lab Statistics Policy
+
+- 검사 통계는 선택한 검사 항목과 선택한 연도를 함께 사용해 조회합니다.
+- 기본 연도는 현재 연도이며, 연도 dropdown은 저장된 `LabResult`의 실제 연도를 기반으로 구성합니다.
+- 선택 연도 안의 원본 검사 결과를 모두 표시하며, 최근 N건 제한이나 월별 평균/샘플링으로 데이터를 줄이지 않습니다.
+- chart는 시간 흐름 확인을 위해 과거 -> 최신 순서로 표시하고, 목록은 최신 -> 과거 순서로 표시합니다.
+- 검사 빈도가 많아도 원본 결과를 생략하지 않으며, chart 영역은 필요 시 가로 scroll로 표시합니다.
+- 검사 설정에서 disabled 된 검사라도 기존 `LabResult`가 있으면 통계 조회 대상에 포함합니다.
+- V3.3에서 확인한 8월 검사값 누락 원인은 최근 N건 제한이 아니라 exact `testName` 기반 분리 가능성과 기본 선택 검사에 최신 데이터가 없을 수 있었던 UX 문제로 정리했습니다. V3.3은 연도별 전체 조회와 명시적 검사 선택으로 이 문제를 개선했습니다.
+- 동일 검사의 이름 표기 차이 alias/normalization은 향후 개선 후보입니다. 예: `HDL-Cholesterol` vs `HDL Cholesterol`, `Inorganic P(인)` vs `P(인)`.
+- 검사 입력 숫자 field의 소수점 값 가시성 개선도 향후 개선 후보입니다.
+- databaseVersion 8, backupVersion 5, LabResult DB schema를 유지하며 DB migration은 없습니다.
+
 ### V3 최종 검증 상태
 
 | Item | Result |
 | --- | --- |
 | `flutter analyze` | PASS: No issues found |
-| `flutter test` | PASS: 243/243 |
-| Focused V3.2.0 tests | PASS |
-| Android V3.2.0 update/install QA | PASS: confirmed app functional failures 0 |
+| `flutter test` | PASS: 246/246 |
+| Focused V3.3.0 statistics tests | PASS: 30/30 |
+| Android V3.3.0 update/install QA | PASS: confirmed app functional failures 0 |
 | Release APK build | PASS |
-| Release APK | `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.2.0.apk` |
+| Release APK | `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.3.0.apk` |
 | databaseVersion | 8 |
 | backupVersion | 5 |
 
@@ -379,12 +397,12 @@ V3 상세 요구사항, 테스트 케이스, 변경 이력은 `docs/v3/`에서 �
 
 ## Release
 
-- Current App Version: `3.2.0+7`
-- Current Code State: V3.2.0 local release build candidate from branch `v3`
-- Current Release Type: Local V3.2.0 Release APK build and Android update-install verification
+- Current App Version: `3.3.0+8`
+- Current Code State: V3.3.0 local release build candidate from branch `v3`
+- Current Release Type: Local V3.3.0 Release APK build and Android update-install verification
 - Current Release APK: `build\app\outputs\flutter-apk\app-release.apk`
-- Current Release APK Size: `54,460,189 bytes`
-- Current external APK copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.2.0.apk`
+- Current Release APK Size: `54,460,185 bytes`
+- Current external APK copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.3.0.apk`
 
 Latest public GitHub release remains V2:
 

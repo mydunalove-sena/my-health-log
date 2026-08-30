@@ -774,3 +774,68 @@ Management-type presets are input convenience defaults only. They are not medica
 ### Result
 
 V3.2.0 lab-result entry and settings passed automated QA, release APK build verification, Android update-install QA, data preservation smoke QA, and launch stability checks. V3.2.0 keeps databaseVersion 8, backupVersion 5, the existing `LabResult` schema, and the existing backup payload unchanged.
+
+## 2026-08-30 - V3.3.0 Yearly Lab Statistics
+
+### Requirement
+
+V3.3.0 improves lab statistics for real lab-frequency patterns where results may be recorded several times per week early on, then weekly, then once every few months. Lab statistics therefore use an explicit year range instead of a recent-N-results window.
+
+### Implementation
+
+- Added a year dropdown to lab statistics.
+- Default lab-statistics year is the current year.
+- Lab statistics filter by selected `testName` and selected year.
+- The selected year displays all matching `LabResult` rows without a recent-N limit.
+- Chart data is sorted old -> new.
+- The result list is sorted new -> old.
+- The chart area supports horizontal scrolling when the selected year has many values.
+- Disabled lab tests remain available in statistics when historical `LabResult` rows exist.
+- No unit conversion was added; the existing mixed-unit policy remains unchanged.
+- No `LabResult` schema, backup payload, database version, or backup version change was added.
+
+### August Data Investigation
+
+- The August omission was not caused by a recent-N limit.
+- The code used exact `testName` grouping, so differently named rows such as `HDL-Cholesterol` and `HDL Cholesterol`, or `Inorganic P(인)` and `P(인)`, remain separate statistics series.
+- The old default-selected lab item could also be a series with no latest August value, which made the latest lab data look missing.
+- V3.3 addresses the confirmed UX problem by making the year range explicit and showing every result for the selected test/year.
+- Alias/normalization across differently named lab tests remains a future improvement candidate.
+
+### Automated QA
+
+- Statistics focused tests: 30 PASS, 0 FAIL.
+- Related regression bundle: 115 PASS, 0 FAIL.
+- Full regression, `flutter test`: 246 PASS, 0 FAIL.
+- `flutter analyze`: PASS, No issues found.
+- `git diff --check`: PASS.
+
+### Release APK
+
+- Command: `flutter build apk --release`.
+- Result: PASS.
+- APK: `build\app\outputs\flutter-apk\app-release.apk`.
+- APK metadata: package `com.example.my_health_log`, versionName `3.3.0`, versionCode `8`.
+- APK size: 54,460,185 bytes.
+- External verified copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.3.0.apk`.
+
+### Android Device QA
+
+- Device: Samsung SM-S918N, Android 16.
+- Update install used `adb install --user 0 -r` over the existing User 0 package.
+- No uninstall, clear data, DB deletion, backup/restore, package-name change, or User 95 install was performed.
+- User 95 DUAL_APP package recurrence was not observed after update.
+- Existing 2026-02-03, 2026-05-12, and 2026-08-11 lab result groups remained visible after update.
+- Existing health records remained visible after update.
+- Existing medication screen remained reachable after update.
+- Existing symptom recording screen remained reachable after update.
+- Creatinine 2026 statistics showed 02/03, 05/12, and 08/11, including the latest August value.
+- BUN 2026 statistics showed 02/03, 05/12, and 08/11, including the latest August value.
+- Tacrolimus 2026 statistics showed all stored 2026 values visible in the UI.
+- Year dropdown displayed the current-year selection.
+- Launch / force-stop / relaunch 3 cycles passed.
+- Filtered logcat showed no app `FATAL EXCEPTION`.
+
+### Result
+
+V3.3.0 yearly lab statistics passed automated QA, release APK build verification, Android User 0 update-install QA, existing-data preservation checks, latest-August regression checks, and launch stability checks. V3.3.0 keeps databaseVersion 8, backupVersion 5, the existing `LabResult` schema, and the existing backup payload unchanged.

@@ -361,6 +361,112 @@ void main() {
     );
   });
 
+  testWidgets('Lab stats default to current year and include latest result', (
+    tester,
+  ) async {
+    final currentYear = DateTime.now().year;
+    await _pumpStatistics(
+      tester,
+      labResults: [
+        _labResult(
+          id: 'l1',
+          date: DateTime(currentYear, 2, 3),
+          testName: 'Creatinine',
+          value: 1.31,
+          unit: 'mg/dL',
+        ),
+        _labResult(
+          id: 'l2',
+          date: DateTime(currentYear, 5, 12),
+          testName: 'Creatinine',
+          value: 1.37,
+          unit: 'mg/dL',
+        ),
+        _labResult(
+          id: 'l3',
+          date: DateTime(currentYear, 8, 11),
+          testName: 'Creatinine',
+          value: 1.35,
+          unit: 'mg/dL',
+        ),
+      ],
+    );
+
+    await tester.tap(find.text('\uAC80\uC0AC').first);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('statistics-lab-year-dropdown')),
+      findsOneWidget,
+    );
+    expect(find.text(currentYear.toString()), findsOneWidget);
+    expect(find.text('1.31 mg/dL'), findsOneWidget);
+    expect(find.text('1.37 mg/dL'), findsOneWidget);
+    expect(find.text('1.35 mg/dL'), findsOneWidget);
+  });
+
+  testWidgets('Lab stats are filtered by selected year', (tester) async {
+    final currentYear = DateTime.now().year;
+    final previousYear = currentYear - 1;
+    await _pumpStatistics(
+      tester,
+      labResults: [
+        _labResult(
+          id: 'l1',
+          date: DateTime(previousYear, 12, 20),
+          testName: 'Creatinine',
+          value: 1.22,
+          unit: 'mg/dL',
+        ),
+        _labResult(
+          id: 'l2',
+          date: DateTime(currentYear, 5, 12),
+          testName: 'Creatinine',
+          value: 1.37,
+          unit: 'mg/dL',
+        ),
+      ],
+    );
+
+    await tester.tap(find.text('\uAC80\uC0AC').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1.37 mg/dL'), findsOneWidget);
+    expect(find.text('1.22 mg/dL'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('statistics-lab-year-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(previousYear.toString()).last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1.22 mg/dL'), findsOneWidget);
+    expect(find.text('1.37 mg/dL'), findsNothing);
+  });
+
+  testWidgets('Lab stats show current-year empty state without crashing', (
+    tester,
+  ) async {
+    final currentYear = DateTime.now().year;
+    await _pumpStatistics(
+      tester,
+      labResults: [
+        _labResult(
+          id: 'l1',
+          date: DateTime(currentYear - 1, 12, 20),
+          testName: 'Creatinine',
+          value: 1.22,
+          unit: 'mg/dL',
+        ),
+      ],
+    );
+
+    await tester.tap(find.text('\uAC80\uC0AC').first);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('$currentYear\uB144\uC5D0'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Lab unit null displays value without null', (tester) async {
     await _pumpStatistics(
       tester,
