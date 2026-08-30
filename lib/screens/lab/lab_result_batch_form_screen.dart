@@ -287,45 +287,73 @@ class _LabResultInputRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unit = definition.defaultUnit?.trim();
+    final valueField = TextField(
+      key: ValueKey('lab-batch-value-${definition.id}'),
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textAlign: TextAlign.right,
+      scrollPadding: const EdgeInsets.only(bottom: 120),
+      decoration: _valueInputDecoration(),
+    );
+    final unitLabel = unit == null || unit.isEmpty
+        ? null
+        : Text(
+            unit,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(color: AppColors.secondaryText),
+          );
+
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            flex: 5,
-            child: Text(
-              definition.displayName,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            flex: 3,
-            child: TextField(
-              key: ValueKey('lab-batch-value-${definition.id}'),
-              controller: controller,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // On phone-width rows, protect the result field first. A second line
+          // avoids letting a fixed unit column squeeze values such as 22.3.
+          final useCompactLayout = constraints.maxWidth < 360;
+          if (useCompactLayout) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  definition.displayName,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(child: valueField),
+                    if (unitLabel != null) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      SizedBox(width: 96, child: unitLabel),
+                    ],
+                  ],
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                flex: 4,
+                child: Text(
+                  definition.displayName,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
               ),
-              textAlign: TextAlign.right,
-              decoration: _inputDecoration(),
-            ),
-          ),
-          if (unit != null && unit.isNotEmpty) ...[
-            const SizedBox(width: AppSpacing.sm),
-            SizedBox(
-              width: 92,
-              child: Text(
-                unit,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: AppColors.secondaryText),
-              ),
-            ),
-          ],
-        ],
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(flex: 3, child: valueField),
+              if (unitLabel != null) ...[
+                const SizedBox(width: AppSpacing.sm),
+                SizedBox(width: 80, child: unitLabel),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -376,6 +404,15 @@ InputDecoration _inputDecoration() {
     focusedErrorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(AppRadius.input),
       borderSide: const BorderSide(color: AppColors.error),
+    ),
+  );
+}
+
+InputDecoration _valueInputDecoration() {
+  return _inputDecoration().copyWith(
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.sm,
+      vertical: AppSpacing.sm,
     ),
   );
 }

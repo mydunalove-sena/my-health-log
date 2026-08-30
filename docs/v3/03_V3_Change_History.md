@@ -839,3 +839,70 @@ V3.3.0 improves lab statistics for real lab-frequency patterns where results may
 ### Result
 
 V3.3.0 yearly lab statistics passed automated QA, release APK build verification, Android User 0 update-install QA, existing-data preservation checks, latest-August regression checks, and launch stability checks. V3.3.0 keeps databaseVersion 8, backupVersion 5, the existing `LabResult` schema, and the existing backup payload unchanged.
+
+## 2026-08-30 - V3.4.0 Lab Input Visibility / Statistics Aliases
+
+### Requirement
+
+V3.4.0 improves two confirmed lab-result usability issues without changing stored health data:
+
+- Numeric lab input fields must make entered decimal values visible enough to verify before saving.
+- Lab statistics should group the known real-world name variants `HDL-Cholesterol` / `HDL Cholesterol` and `Inorganic P(인)` / `P(인)` under the canonical statistic names.
+
+Alias handling is an explicit compatibility rule for known lab names, not fuzzy matching, medical interpretation, or automatic test-name cleanup.
+
+### Implementation
+
+- Widened and stabilized numeric input fields in the multi-lab entry screen so values such as `1.31`, `22.3`, `6.79`, `10.4`, and `292` remain visible in the field.
+- Kept batch save/update semantics unchanged.
+- Added explicit lab-statistics alias mapping:
+  - `HDL-Cholesterol` -> `HDL Cholesterol`
+  - `Inorganic P(인)` -> `P(인)`
+- Statistics dropdown displays the canonical names instead of splitting these known aliases into separate series.
+- Statistics filtering includes rows matching the selected canonical name and its aliases.
+- Same-date alias rows are not silently merged or overwritten; both rows remain visible for user review.
+- Existing `LabResult.testName` values are not renamed.
+- No unit conversion was added.
+- No OCR input, normal/risk judgment, diagnosis, or treatment guidance was added.
+- No `LabResult` schema, backup payload, database version, or backup version change was added.
+
+### Automated QA
+
+- Focused V3.4 lab safety tests: 16 PASS, 0 FAIL.
+- Related regression bundle: 124 PASS, 0 FAIL.
+- Full regression, `flutter test`: 262 PASS, 0 FAIL.
+- `flutter analyze`: PASS, No issues found.
+- `git diff --check`: PASS.
+
+### Release APK
+
+- Command: `flutter build apk --release`.
+- Result: PASS.
+- APK: `build\app\outputs\flutter-apk\app-release.apk`.
+- APK metadata: package `com.example.my_health_log`, versionName `3.4.0`, versionCode `9`.
+- APK size: 54,476,573 bytes.
+- External verified copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.4.0.apk`.
+- SHA-256: `E6F7F6EF1DF0F6318F07A82EA993B784EE7B5A9A9E9751525792F7AC618BDEA5`.
+
+### Android Device QA
+
+- Device: Samsung SM-S918N, Android 16.
+- Update install used `adb install --user 0 -r` over the existing User 0 package.
+- No uninstall, clear data, DB deletion, backup/restore, package-name change, or User 95 install was performed.
+- User 95 DUAL_APP package recurrence was not observed after update.
+- Existing 2026-02-03, 2026-05-12, and 2026-08-11 lab result groups remained visible after update.
+- Existing health records remained visible after update.
+- Existing medication screen remained reachable after update.
+- Existing symptom recording screen remained reachable after update.
+- Numeric lab input visibility was checked through the UI with representative integer and decimal values; no save was performed during this smoke check.
+- `HDL Cholesterol` 2026 statistics showed 02/03, 05/12, and 08/11, including the row originally stored as `HDL-Cholesterol`.
+- `P(인)` 2026 statistics showed 02/03, 05/12, and 08/11, including the row originally stored as `Inorganic P(인)`.
+- Creatinine 2026 statistics showed 02/03, 05/12, and 08/11.
+- BUN 2026 statistics showed 02/03, 05/12, and 08/11.
+- Tacrolimus 2026 statistics showed the stored 2026 values visible in the UI.
+- Launch / force-stop / relaunch 3 cycles passed.
+- Filtered logcat showed no app `FATAL EXCEPTION`.
+
+### Result
+
+V3.4.0 lab input visibility and statistics alias handling passed automated QA, release APK build verification, Android User 0 update-install QA, existing-data preservation checks, alias statistics checks, and launch stability checks. V3.4.0 keeps databaseVersion 8, backupVersion 5, the existing `LabResult` schema, and the existing backup payload unchanged.

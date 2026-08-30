@@ -310,6 +310,8 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 - 검사 항목 + 연도 기준 filtering
 - 최근 N건 제한 없는 해당 연도 전체 결과 표시
 - 검사 통계 chart 과거 -> 최신, 목록 최신 -> 과거
+- V3.4.0 검사 입력 숫자 field 가시성 개선
+- 검사 통계 HDL/P 표기 alias 정규화
 
 ### V3 범위 제한
 
@@ -358,16 +360,26 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 - 검사 입력 숫자 field의 소수점 값 가시성 개선도 향후 개선 후보입니다.
 - databaseVersion 8, backupVersion 5, LabResult DB schema를 유지하며 DB migration은 없습니다.
 
+### V3.4.0 Lab Safety Policy
+
+- 다중 검사 입력 화면에서 숫자 입력 field의 실제 입력값이 잘려 보이지 않도록 field 폭과 표시 방식을 개선했습니다.
+- 저장 전 사용자가 소수점 값을 확인하기 쉽게 만드는 UI 개선이며, 저장 로직이나 `LabResult` schema는 변경하지 않았습니다.
+- 검사 통계에서 `HDL-Cholesterol`은 `HDL Cholesterol`로, `Inorganic P(인)`은 `P(인)`으로 명시적 alias 처리합니다.
+- Alias 처리는 통계 조회 편의를 위한 표시/그룹화 정책이며, 기존 `LabResult.testName` 값을 일괄 rename 하거나 DB 데이터를 수정하지 않습니다.
+- 동일 날짜에 alias 관계의 원본 row가 함께 존재하면 데이터를 임의로 병합하거나 덮어쓰지 않고 각각 표시해 사용자 검토가 가능하게 유지합니다.
+- Fuzzy matching, 자동 의학 판정, 검사값 정상/위험 해석, unit conversion은 추가하지 않았습니다.
+- databaseVersion 8, backupVersion 5, LabResult DB schema를 유지하며 DB migration은 없습니다.
+
 ### V3 최종 검증 상태
 
 | Item | Result |
 | --- | --- |
 | `flutter analyze` | PASS: No issues found |
-| `flutter test` | PASS: 246/246 |
-| Focused V3.3.0 statistics tests | PASS: 30/30 |
-| Android V3.3.0 update/install QA | PASS: confirmed app functional failures 0 |
+| `flutter test` | PASS: 262/262 |
+| Focused V3.4.0 lab safety tests | PASS: 16/16 |
+| Android V3.4.0 update/install QA | PASS: confirmed app functional failures 0 |
 | Release APK build | PASS |
-| Release APK | `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.3.0.apk` |
+| Release APK | `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.4.0.apk` |
 | databaseVersion | 8 |
 | backupVersion | 5 |
 
@@ -397,12 +409,12 @@ V3 상세 요구사항, 테스트 케이스, 변경 이력은 `docs/v3/`에서 �
 
 ## Release
 
-- Current App Version: `3.3.0+8`
-- Current Code State: V3.3.0 local release build candidate from branch `v3`
-- Current Release Type: Local V3.3.0 Release APK build and Android update-install verification
+- Current App Version: `3.4.0+9`
+- Current Code State: V3.4.0 local release build candidate from branch `v3`
+- Current Release Type: Local V3.4.0 Release APK build and Android User 0 update-install verification
 - Current Release APK: `build\app\outputs\flutter-apk\app-release.apk`
-- Current Release APK Size: `54,460,185 bytes`
-- Current external APK copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.3.0.apk`
+- Current Release APK Size: `54,476,573 bytes`
+- Current external APK copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.4.0.apk`
 
 Latest public GitHub release remains V2:
 

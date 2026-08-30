@@ -14,6 +14,20 @@ import '../../services/lab_result_service.dart';
 
 enum _StatsTab { weight, bloodPressure, lab }
 
+// Explicit, medically reviewed aliases only. Do not add fuzzy matching,
+// punctuation stripping, or substring matching here.
+const _labTestCanonicalNames = <String, String>{
+  'hdl cholesterol': 'HDL Cholesterol',
+  'hdl-cholesterol': 'HDL Cholesterol',
+  'p(인)': 'P(인)',
+  'inorganic p(인)': 'P(인)',
+};
+
+String _canonicalLabTestName(String testName) {
+  final trimmed = testName.trim();
+  return _labTestCanonicalNames[trimmed.toLowerCase()] ?? trimmed;
+}
+
 class StatisticsScreen extends StatefulWidget {
   const StatisticsScreen({
     super.key,
@@ -329,11 +343,14 @@ class _LabStatsView extends StatelessWidget {
 
     final testNames = <String>{};
     for (final result in results) {
-      testNames.add(result.testName.trim());
+      testNames.add(_canonicalLabTestName(result.testName));
     }
     final sortedNames = testNames.toList()..sort();
-    final selected = sortedNames.contains(selectedTestName)
-        ? selectedTestName!
+    final requestedSelection = selectedTestName == null
+        ? null
+        : _canonicalLabTestName(selectedTestName!);
+    final selected = sortedNames.contains(requestedSelection)
+        ? requestedSelection!
         : sortedNames.first;
     final years = _availableYears(results);
     final currentYear = DateTime.now().year;
@@ -344,11 +361,13 @@ class _LabStatsView extends StatelessWidget {
         results
             .where(
               (result) =>
-                  result.testName.trim() == selected &&
+                  _canonicalLabTestName(result.testName) == selected &&
                   result.date.year == selectedLabYear,
             )
             .toList()
           ..sort((a, b) => a.date.compareTo(b.date));
+    // Preserve every stored result. If two aliases exist on the same date,
+    // both remain visible; statistics must not delete, average, or overwrite.
     final unitSet = {for (final result in filtered) (result.unit ?? '').trim()};
     final hasMixedUnits = unitSet.length > 1;
 
