@@ -6,12 +6,20 @@ import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/lab_result.dart';
 import '../../services/lab_result_service.dart';
+import '../../services/lab_test_settings_service.dart';
+import 'lab_result_batch_form_screen.dart';
 import 'lab_result_form_screen.dart';
+import 'lab_test_settings_screen.dart';
 
 class LabScreen extends StatelessWidget {
-  const LabScreen({super.key, required this.service});
+  const LabScreen({
+    super.key,
+    required this.service,
+    this.labTestSettingsService,
+  });
 
   final LabResultService service;
+  final LabTestSettingsService? labTestSettingsService;
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +31,12 @@ class LabScreen extends StatelessWidget {
           appBar: AppBar(
             title: const Text('\uAC80\uC0AC \uACB0\uACFC'),
             actions: [
+              IconButton(
+                key: const Key('lab-settings-button'),
+                tooltip: '\uAC80\uC0AC \uC124\uC815',
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () => _openSettings(context),
+              ),
               IconButton(
                 key: const Key('lab-add-button'),
                 tooltip: '\uAC80\uC0AC \uACB0\uACFC \uB4F1\uB85D',
@@ -70,22 +84,59 @@ class LabScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _openForm(BuildContext context, {DateTime? initialDate}) async {
-    final saved = await Navigator.of(context).push<LabResult>(
-      MaterialPageRoute(
-        builder: (_) =>
-            LabResultFormScreen(service: service, initialDate: initialDate),
+  Future<void> _openSettings(BuildContext context) async {
+    final settingsService = labTestSettingsService;
+    final fallbackSettingsService = settingsService == null
+        ? LabTestSettingsService.inMemory()
+        : null;
+    if (fallbackSettingsService != null) {
+      await fallbackSettingsService.load();
+    }
+    if (!context.mounted) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LabTestSettingsScreen(
+          service: settingsService ?? fallbackSettingsService!,
+        ),
       ),
     );
-    if (context.mounted && saved != null) {
-      await _openDetail(context, saved.date);
+  }
+
+  Future<void> _openForm(BuildContext context, {DateTime? initialDate}) async {
+    final settingsService = labTestSettingsService;
+    final fallbackSettingsService = settingsService == null
+        ? LabTestSettingsService.inMemory()
+        : null;
+    if (fallbackSettingsService != null) {
+      await fallbackSettingsService.load();
+    }
+    if (!context.mounted) {
+      return;
+    }
+    final savedDate = await Navigator.of(context).push<DateTime>(
+      MaterialPageRoute(
+        builder: (_) => LabResultBatchFormScreen(
+          labResultService: service,
+          labTestSettingsService: settingsService ?? fallbackSettingsService!,
+          initialDate: initialDate,
+        ),
+      ),
+    );
+    if (context.mounted && savedDate != null) {
+      await _openDetail(context, savedDate);
     }
   }
 
   Future<void> _openDetail(BuildContext context, DateTime date) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => LabResultDetailScreen(service: service, date: date),
+        builder: (_) => LabResultDetailScreen(
+          service: service,
+          labTestSettingsService: labTestSettingsService,
+          date: date,
+        ),
       ),
     );
   }
@@ -96,10 +147,12 @@ class LabResultDetailScreen extends StatelessWidget {
     super.key,
     required this.service,
     required this.date,
+    this.labTestSettingsService,
   });
 
   final LabResultService service;
   final DateTime date;
+  final LabTestSettingsService? labTestSettingsService;
 
   @override
   Widget build(BuildContext context) {
@@ -173,15 +226,38 @@ class LabResultDetailScreen extends StatelessWidget {
   }
 
   Future<void> _openForm(BuildContext context, {LabResult? result}) async {
-    final saved = await Navigator.of(context).push<LabResult>(
-      MaterialPageRoute(
-        builder: (_) => LabResultFormScreen(
-          service: service,
-          result: result,
-          initialDate: date,
+    Object? saved;
+    if (result == null) {
+      final settingsService = labTestSettingsService;
+      final fallbackSettingsService = settingsService == null
+          ? LabTestSettingsService.inMemory()
+          : null;
+      if (fallbackSettingsService != null) {
+        await fallbackSettingsService.load();
+      }
+      if (!context.mounted) {
+        return;
+      }
+      saved = await Navigator.of(context).push<DateTime>(
+        MaterialPageRoute(
+          builder: (_) => LabResultBatchFormScreen(
+            labResultService: service,
+            labTestSettingsService: settingsService ?? fallbackSettingsService!,
+            initialDate: date,
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      saved = await Navigator.of(context).push<LabResult>(
+        MaterialPageRoute(
+          builder: (_) => LabResultFormScreen(
+            service: service,
+            result: result,
+            initialDate: date,
+          ),
+        ),
+      );
+    }
     if (!context.mounted) {
       return;
     }
@@ -189,7 +265,11 @@ class LabResultDetailScreen extends StatelessWidget {
       Navigator.of(context).pop();
       return;
     }
-    if (saved != null && saved.dateKey != LabResult.formatDateKey(date)) {
+    if (saved is LabResult && saved.dateKey != LabResult.formatDateKey(date)) {
+      Navigator.of(context).pop();
+    }
+    if (saved is DateTime &&
+        LabResult.formatDateKey(saved) != LabResult.formatDateKey(date)) {
       Navigator.of(context).pop();
     }
   }

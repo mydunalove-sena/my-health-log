@@ -13,6 +13,7 @@ import 'services/exercise_service.dart';
 import 'services/health_field_visibility_service.dart';
 import 'services/health_record_service.dart';
 import 'services/lab_result_service.dart';
+import 'services/lab_test_settings_service.dart';
 import 'services/medication_service.dart';
 import 'services/symptom_service.dart';
 
@@ -25,6 +26,7 @@ class MyHealthLogApp extends StatelessWidget {
     this.symptomService,
     this.exerciseService,
     this.healthFieldVisibilityService,
+    this.labTestSettingsService,
   });
 
   final HealthRecordService? healthRecordService;
@@ -33,6 +35,7 @@ class MyHealthLogApp extends StatelessWidget {
   final SymptomService? symptomService;
   final ExerciseService? exerciseService;
   final HealthFieldVisibilityService? healthFieldVisibilityService;
+  final LabTestSettingsService? labTestSettingsService;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +50,7 @@ class MyHealthLogApp extends StatelessWidget {
         symptomService: symptomService,
         exerciseService: exerciseService,
         healthFieldVisibilityService: healthFieldVisibilityService,
+        labTestSettingsService: labTestSettingsService,
       ),
     );
   }
@@ -60,6 +64,7 @@ class _AppBootstrap extends StatefulWidget {
     this.symptomService,
     this.exerciseService,
     this.healthFieldVisibilityService,
+    this.labTestSettingsService,
   });
 
   final HealthRecordService? healthRecordService;
@@ -68,6 +73,7 @@ class _AppBootstrap extends StatefulWidget {
   final SymptomService? symptomService;
   final ExerciseService? exerciseService;
   final HealthFieldVisibilityService? healthFieldVisibilityService;
+  final LabTestSettingsService? labTestSettingsService;
 
   @override
   State<_AppBootstrap> createState() => _AppBootstrapState();
@@ -80,6 +86,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
   late final SymptomService _symptomService;
   late final ExerciseService _exerciseService;
   late final HealthFieldVisibilityService _fieldVisibilityService;
+  late final LabTestSettingsService _labTestSettingsService;
   late final Future<void> _loadFuture;
 
   @override
@@ -113,6 +120,11 @@ class _AppBootstrapState extends State<_AppBootstrap> {
         (_hasInjectedServices
             ? HealthFieldVisibilityService.inMemory()
             : HealthFieldVisibilityService());
+    _labTestSettingsService =
+        widget.labTestSettingsService ??
+        (_hasInjectedServices
+            ? LabTestSettingsService.inMemory()
+            : LabTestSettingsService());
     _loadFuture = Future.wait<void>([
       _healthService.load(),
       _medicationService.load(),
@@ -120,6 +132,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
       _symptomService.load(),
       _exerciseService.load(),
       _fieldVisibilityService.load(),
+      _labTestSettingsService.load(),
     ]);
   }
 
@@ -128,7 +141,8 @@ class _AppBootstrapState extends State<_AppBootstrap> {
         widget.medicationService != null ||
         widget.labResultService != null ||
         widget.symptomService != null ||
-        widget.exerciseService != null;
+        widget.exerciseService != null ||
+        widget.labTestSettingsService != null;
   }
 
   @override
@@ -157,6 +171,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
           symptomService: _symptomService,
           exerciseService: _exerciseService,
           healthFieldVisibilityService: _fieldVisibilityService,
+          labTestSettingsService: _labTestSettingsService,
         );
       },
     );
@@ -172,6 +187,7 @@ class AppShell extends StatefulWidget {
     required this.symptomService,
     required this.exerciseService,
     required this.healthFieldVisibilityService,
+    required this.labTestSettingsService,
   });
 
   final HealthRecordService healthRecordService;
@@ -180,6 +196,7 @@ class AppShell extends StatefulWidget {
   final SymptomService symptomService;
   final ExerciseService exerciseService;
   final HealthFieldVisibilityService healthFieldVisibilityService;
+  final LabTestSettingsService labTestSettingsService;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -217,7 +234,10 @@ class _AppShellState extends State<AppShell> {
         service: widget.medicationService,
         symptomService: widget.symptomService,
       ),
-      LabScreen(service: widget.labResultService),
+      LabScreen(
+        service: widget.labResultService,
+        labTestSettingsService: widget.labTestSettingsService,
+      ),
       StatisticsScreen(
         healthRecordService: widget.healthRecordService,
         labResultService: widget.labResultService,

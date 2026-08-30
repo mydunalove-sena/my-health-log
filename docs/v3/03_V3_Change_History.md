@@ -689,3 +689,88 @@ V3.1.0 separates exercise recording from legacy `HealthRecord.steps` so the app 
 ### Result
 
 V3.1.0 exercise-record improvement passed focused tests, final full regression, static analysis, release APK build verification, and real Android device automated QA with no confirmed app functional failures. V3.1.0 uses databaseVersion 8 and backupVersion 5.
+
+## 2026-08-30 - V3.2.0 Lab Result Entry
+
+### Requirement
+
+V3.2.0 improves lab-result entry for real use by allowing multiple enabled lab tests to be entered for one lab date while preserving the existing `LabResult` model, database schema, statistics behavior, and backup payload.
+
+Management-type presets are input convenience defaults only. They are not medical judgments about required tests, normal/risk status, diagnosis, or treatment.
+
+### Implementation
+
+- Added `LabTestDefinition` and predefined 31 lab tests.
+- Added 7 management types: kidney transplant, dialysis, liver transplant, lung transplant, pancreas transplant, general health, and custom.
+- Added management-type preset lab-test sets.
+- Added `LabTestSettingsService` using SharedPreferences persistence and in-memory test storage.
+- Added a lab-test settings screen reachable from the lab screen.
+- Settings screen supports management type selection, preset application confirmation, enable/disable checkboxes, and custom lab-test addition.
+- Custom lab-test names are trimmed and checked case-insensitively against predefined and existing custom definitions.
+- Custom lab-test units are trimmed, and an empty unit is stored as `null`.
+- Custom lab tests are enabled immediately after addition.
+- Added `LabResultBatchFormScreen` for the new lab-result add flow.
+- New lab-result registration opens the multi-entry screen.
+- Existing lab-result edit/delete keeps the existing single-result form behavior.
+- Batch entry shows only enabled definitions, with display names and default units.
+- Batch entry safely handles definitions without units.
+- Existing results for the selected date are prefilled by test name.
+- Saving updates existing same-date/test-name results and inserts new results for entered rows.
+- Existing `id` and `createdAt` are preserved on update; `updatedAt` is refreshed.
+- Empty new rows are not inserted.
+- Clearing an existing value in the batch screen does not automatically delete the DB row.
+- Existing lab results remain visible in lab list/detail and Statistics even if the test is disabled in settings.
+- V3.2 does not add OCR input or automatic normal/risk judgment.
+
+### Compatibility
+
+- App version is `3.2.0+7`.
+- databaseVersion remains 8.
+- backupVersion remains 5.
+- `LabResult` schema unchanged.
+- `BackupDocument` payload unchanged.
+- No DB migration was added.
+- Lab settings are treated as app preferences and are not included in backupVersion 5.
+
+### Automated QA
+
+- Lab test settings focused tests: PASS.
+- Batch/settings integration focused tests: PASS.
+- Lab result batch focused tests: PASS.
+- Phase 1 settings service tests: PASS.
+- Existing LabResult CRUD regression: PASS.
+- Statistics regression: PASS.
+- Backup regression: PASS.
+- Full regression, `flutter test`: 243 PASS, 0 FAIL.
+- `flutter analyze`: PASS, No issues found.
+- `git diff --check`: PASS.
+
+### Release APK
+
+- Command: `flutter build apk --release`.
+- Result: PASS.
+- APK: `build\app\outputs\flutter-apk\app-release.apk`.
+- APK metadata: package `com.example.my_health_log`, versionName `3.2.0`, versionCode `7`.
+- APK size: 54,460,189 bytes.
+- External verified copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.2.0.apk`.
+
+### Android Device QA
+
+- Device: Samsung SM-S918N, Android 16, device ID R3CW201RKMP.
+- Existing installed app before update: versionName `3.1.1`, versionCode `6`.
+- Update install used `adb install -r` over the existing package.
+- No uninstall, clear data, DB deletion, or package-name change was performed.
+- Post-update installed app: versionName `3.2.0`, versionCode `7`.
+- Existing health records remained visible after update.
+- Existing lab records remained visible after update.
+- Existing medication records remained visible after update.
+- Existing symptom recording screen remained reachable after update.
+- Batch lab-entry screen opened on device and showed enabled lab tests, names, units, date, scroll behavior, and the full-save action.
+- Lab settings screen opened on device and showed management-type UI, lab-test checkboxes, predefined units, and the custom-test dialog.
+- The custom-test dialog was opened and cancelled; no dummy custom lab test was saved.
+- Launch / force-stop / relaunch 3 cycles passed.
+- Filtered logcat showed no app `FATAL EXCEPTION`.
+
+### Result
+
+V3.2.0 lab-result entry and settings passed automated QA, release APK build verification, Android update-install QA, data preservation smoke QA, and launch stability checks. V3.2.0 keeps databaseVersion 8, backupVersion 5, the existing `LabResult` schema, and the existing backup payload unchanged.

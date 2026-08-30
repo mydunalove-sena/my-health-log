@@ -31,9 +31,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('\uAC80\uC0AC \uACB0\uACFC \uB4F1\uB85D'), findsWidgets);
-    expect(find.byKey(const Key('lab-date-field')), findsOneWidget);
-    expect(find.byKey(const Key('lab-test-name-field')), findsOneWidget);
-    expect(find.byKey(const Key('lab-value-field')), findsOneWidget);
+    expect(find.byKey(const Key('lab-batch-date-field')), findsOneWidget);
+    expect(find.byKey(const Key('lab-batch-value-creatinine')), findsOneWidget);
   });
 
   testWidgets('Lab validation requires test name and value', (tester) async {
@@ -88,15 +87,18 @@ void main() {
 
     await _addLabResult(
       tester,
-      testName: '\uC911\uC131\uC9C0\uBC29',
+      testId: 'creatinine',
+      expectedTestName: 'Creatinine',
       value: '185',
-      unit: 'mg/dL',
     );
 
     expect(service.results.length, 1);
-    expect(find.text('\uC911\uC131\uC9C0\uBC29'), findsOneWidget);
+    expect(find.text('Creatinine'), findsOneWidget);
     expect(find.text('185 mg/dL'), findsOneWidget);
-    expect(find.text(LabResult.formatDisplayDate(DateTime.now())), findsWidgets);
+    expect(
+      find.text(LabResult.formatDisplayDate(DateTime.now())),
+      findsWidgets,
+    );
   });
 
   testWidgets('Same date multiple LabResults are grouped together', (
@@ -294,9 +296,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('lab-delete-lab-1')));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const Key('lab-detail-confirm-delete-button')),
-    );
+    await tester.tap(find.byKey(const Key('lab-detail-confirm-delete-button')));
     await tester.pumpAndSettle();
 
     expect(service.results, isEmpty);
@@ -341,9 +341,9 @@ void main() {
 
     await _addLabResult(
       tester,
-      testName: '\uBE44\uD0C0\uBBBCD',
+      testId: 'creatinine',
+      expectedTestName: 'Creatinine',
       value: '42',
-      unit: 'ng/mL',
       date: pastDate,
     );
 
@@ -374,7 +374,7 @@ void main() {
     await tester.tap(find.byKey(const Key('lab-detail-add-button')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('lab-date-field')), findsOneWidget);
+    expect(find.byKey(const Key('lab-batch-date-field')), findsOneWidget);
     expect(find.text(LabResult.formatDisplayDate(date)), findsOneWidget);
   });
 
@@ -449,30 +449,33 @@ void main() {
 
 Future<void> _addLabResult(
   WidgetTester tester, {
-  required String testName,
+  required String testId,
+  required String expectedTestName,
   required String value,
-  String? unit,
   DateTime? date,
 }) async {
   await tester.tap(find.byKey(const Key('lab-add-button')));
   await tester.pumpAndSettle();
   if (date != null) {
-    await _pickVisibleDay(tester, date);
+    await _pickVisibleDay(tester, date, dateFieldKey: 'lab-batch-date-field');
   }
-  await tester.enterText(
-    find.byKey(const Key('lab-test-name-field')),
-    testName,
-  );
-  await tester.enterText(find.byKey(const Key('lab-value-field')), value);
-  if (unit != null) {
-    await tester.enterText(find.byKey(const Key('lab-unit-field')), unit);
+  expect(find.text(expectedTestName), findsOneWidget);
+  await tester.enterText(find.byKey(Key('lab-batch-value-$testId')), value);
+  final saveButton = find.byKey(const Key('lab-batch-save-button'));
+  for (var i = 0; i < 5 && saveButton.evaluate().isEmpty; i++) {
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
   }
-  await tester.tap(find.byKey(const Key('lab-save-button')));
+  await tester.tap(find.byKey(const Key('lab-batch-save-button')));
   await tester.pumpAndSettle();
 }
 
-Future<void> _pickVisibleDay(WidgetTester tester, DateTime date) async {
-  await tester.tap(find.byKey(const Key('lab-date-field')));
+Future<void> _pickVisibleDay(
+  WidgetTester tester,
+  DateTime date, {
+  String dateFieldKey = 'lab-date-field',
+}) async {
+  await tester.tap(find.byKey(Key(dateFieldKey)));
   await tester.pumpAndSettle();
   final calendar = find.byType(CalendarDatePicker);
   expect(calendar, findsOneWidget);
