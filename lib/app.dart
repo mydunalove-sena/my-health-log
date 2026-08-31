@@ -287,10 +287,14 @@ class _AppShellState extends State<AppShell> {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => DataManagementScreen(
-          backupService: BackupService(repository: SqfliteBackupRepository()),
+          backupService: BackupService(
+            repository: SqfliteBackupRepository(),
+            labTestSettingsService: widget.labTestSettingsService,
+          ),
           healthRecordService: widget.healthRecordService,
           medicationService: widget.medicationService,
           labResultService: widget.labResultService,
+          labTestSettingsService: widget.labTestSettingsService,
           symptomService: widget.symptomService,
           exerciseService: widget.exerciseService,
         ),

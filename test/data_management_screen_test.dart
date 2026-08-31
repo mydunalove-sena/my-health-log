@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:my_health_log/models/medication.dart';
+import 'package:my_health_log/models/lab_test_definition.dart';
 import 'package:my_health_log/models/symptom.dart';
 import 'package:my_health_log/screens/data_management/data_management_screen.dart';
 import 'package:my_health_log/services/backup_service.dart';
 import 'package:my_health_log/services/exercise_service.dart';
 import 'package:my_health_log/services/health_record_service.dart';
 import 'package:my_health_log/services/lab_result_service.dart';
+import 'package:my_health_log/services/lab_test_settings_service.dart';
 import 'package:my_health_log/services/medication_service.dart';
 import 'package:my_health_log/services/symptom_service.dart';
 
@@ -72,11 +74,13 @@ void main() {
       InMemoryExerciseRecordStorage(),
       healthRecordService,
     );
+    final labTestSettingsService = LabTestSettingsService.inMemory();
     await Future.wait([
       healthRecordService.load(),
       medicationService.load(),
       symptomService.load(),
       exerciseService.load(),
+      labTestSettingsService.load(),
     ]);
 
     expect(
@@ -96,6 +100,11 @@ void main() {
       labResults: const [],
       symptomDefinitions: definitions,
       symptomRecords: restoredSymptomRecords,
+      labTestSettings: const LabTestSettingsBackup(
+        managementType: LabManagementType.dialysis,
+        enabledLabTestIds: ['ktv'],
+        customDefinitions: [],
+      ),
     );
     final backupService = _TestBackupService(
       repository: _MutableBackupRepository(
@@ -107,6 +116,7 @@ void main() {
         appVersion: 'test',
         snapshot: restoredSnapshot,
       ),
+      labTestSettingsService: labTestSettingsService,
     );
 
     await tester.pumpWidget(
@@ -116,6 +126,7 @@ void main() {
           healthRecordService: healthRecordService,
           medicationService: medicationService,
           labResultService: LabResultService(InMemoryLabResultStorage()),
+          labTestSettingsService: labTestSettingsService,
           symptomService: symptomService,
           exerciseService: exerciseService,
         ),
@@ -141,11 +152,17 @@ void main() {
       SymptomSeverity.severe,
     );
     expect(medicationService.activeMedications.single.name, 'Restored med');
+    expect(labTestSettingsService.managementType, LabManagementType.dialysis);
+    expect(labTestSettingsService.enabledLabTestIds, ['ktv']);
   });
 }
 
 class _TestBackupService extends BackupService {
-  _TestBackupService({required super.repository, required this.document});
+  _TestBackupService({
+    required super.repository,
+    required this.document,
+    super.labTestSettingsService,
+  });
 
   final BackupDocument document;
 

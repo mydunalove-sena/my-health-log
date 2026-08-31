@@ -306,7 +306,7 @@ void main() {
 
   test('V3.1.0 compatibility versions include exercise records', () {
     expect(AppDatabase.databaseVersion, 8);
-    expect(BackupDocument.backupVersion, 5);
+    expect(BackupDocument.backupVersion, 6);
   });
 }
 

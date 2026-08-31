@@ -319,7 +319,7 @@ void main() {
       final backup = await service.createBackup(createdAt: now);
       final restored = service.validateBackup(backup.toPrettyJson());
 
-      expect(restored.toJson()['backupVersion'], 5);
+      expect(restored.toJson()['backupVersion'], 6);
       expect(restored.snapshot.medicationDoseHistory, hasLength(1));
       expect(
         restored.snapshot.medicationDoseHistory.single.previousDisplayDose,

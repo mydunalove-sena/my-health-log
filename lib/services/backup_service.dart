@@ -12,6 +12,7 @@ import '../models/medication.dart';
 import '../models/exercise_record.dart';
 import '../models/symptom.dart';
 import 'app_database.dart';
+import 'lab_test_settings_service.dart';
 
 class BackupValidationException implements Exception {
   const BackupValidationException(this.message);
@@ -34,6 +35,7 @@ class BackupSnapshot {
     this.symptomRecords = const [],
     this.prnSymptomLinks = const [],
     this.exerciseRecords = const [],
+    this.labTestSettings,
   });
 
   final List<HealthRecord> healthRecords;
@@ -46,6 +48,36 @@ class BackupSnapshot {
   final List<PrnSymptomLink> prnSymptomLinks;
   final List<ExerciseRecord> exerciseRecords;
   final List<LabResult> labResults;
+  final LabTestSettingsBackup? labTestSettings;
+
+  BackupSnapshot copyWith({
+    List<HealthRecord>? healthRecords,
+    List<Medication>? medications,
+    List<MedicationLog>? medicationLogs,
+    List<PrnMedicationLog>? prnMedicationLogs,
+    List<MedicationDoseHistory>? medicationDoseHistory,
+    List<SymptomDefinition>? symptomDefinitions,
+    List<SymptomRecord>? symptomRecords,
+    List<PrnSymptomLink>? prnSymptomLinks,
+    List<ExerciseRecord>? exerciseRecords,
+    List<LabResult>? labResults,
+    LabTestSettingsBackup? labTestSettings,
+  }) {
+    return BackupSnapshot(
+      healthRecords: healthRecords ?? this.healthRecords,
+      medications: medications ?? this.medications,
+      medicationLogs: medicationLogs ?? this.medicationLogs,
+      prnMedicationLogs: prnMedicationLogs ?? this.prnMedicationLogs,
+      medicationDoseHistory:
+          medicationDoseHistory ?? this.medicationDoseHistory,
+      symptomDefinitions: symptomDefinitions ?? this.symptomDefinitions,
+      symptomRecords: symptomRecords ?? this.symptomRecords,
+      prnSymptomLinks: prnSymptomLinks ?? this.prnSymptomLinks,
+      exerciseRecords: exerciseRecords ?? this.exerciseRecords,
+      labResults: labResults ?? this.labResults,
+      labTestSettings: labTestSettings ?? this.labTestSettings,
+    );
+  }
 
   Map<String, Object?> toJson() {
     return {
@@ -67,6 +99,7 @@ class BackupSnapshot {
           .map((record) => record.toMap())
           .toList(),
       'labResults': labResults.map((result) => result.toMap()).toList(),
+      if (labTestSettings != null) 'labTestSettings': labTestSettings!.toJson(),
     };
   }
 
@@ -123,6 +156,12 @@ class BackupSnapshot {
       ExerciseRecord.fromMap,
       isRequired: backupVersion >= 5,
     );
+    final labTestSettings = _readVersionedObject(
+      json,
+      'labTestSettings',
+      LabTestSettingsBackup.fromJson,
+      isRequired: backupVersion >= 6,
+    );
     final labResults = _readCollection(json, 'labResults', LabResult.fromMap);
 
     final medicationIds = medications.map((item) => item.id).toSet();
@@ -161,6 +200,7 @@ class BackupSnapshot {
       symptomRecords: symptomRecords,
       prnSymptomLinks: prnSymptomLinks,
       exerciseRecords: exerciseRecords,
+      labTestSettings: labTestSettings,
       labResults: labResults,
     );
   }
@@ -202,6 +242,28 @@ class BackupSnapshot {
     return _readOptionalCollection(json, key, parse);
   }
 
+  static T? _readVersionedObject<T>(
+    Map<String, Object?> json,
+    String key,
+    T Function(Map<String, Object?> map) parse, {
+    required bool isRequired,
+  }) {
+    final value = json[key];
+    if (value == null && !isRequired) {
+      return null;
+    }
+    if (value is! Map) {
+      throw const BackupValidationException('諛깆뾽 ?곗씠?곌? ?먯긽?섏뼱 蹂듭썝?????놁뒿?덈떎.');
+    }
+    try {
+      return parse(Map<String, Object?>.from(value));
+    } on BackupValidationException {
+      rethrow;
+    } catch (_) {
+      throw const BackupValidationException('諛깆뾽 ?곗씠?곌? ?먯긽?섏뼱 蹂듭썝?????놁뒿?덈떎.');
+    }
+  }
+
   static List<T> _parseCollection<T>(
     List<Object?> value,
     T Function(Map<String, Object?> map) parse,
@@ -232,8 +294,8 @@ class BackupDocument {
   });
 
   static const appName = 'My Health Log';
-  static const backupVersion = 5;
-  static const supportedBackupVersions = {1, 2, 3, 4, 5};
+  static const backupVersion = 6;
+  static const supportedBackupVersions = {1, 2, 3, 4, 5, 6};
 
   final DateTime createdAt;
   final String appVersion;
@@ -457,16 +519,25 @@ class InMemoryBackupRepository implements BackupRepository {
 }
 
 class BackupService {
-  BackupService({required this.repository, this.appVersion = '1.0.1+2'});
+  BackupService({
+    required this.repository,
+    this.appVersion = '1.0.1+2',
+    this.labTestSettingsService,
+  });
 
   final BackupRepository repository;
   final String appVersion;
+  final LabTestSettingsService? labTestSettingsService;
 
   Future<BackupDocument> createBackup({DateTime? createdAt}) async {
+    final snapshot = await repository.fetchSnapshot();
+    final labSettings =
+        labTestSettingsService?.exportBackup() ??
+        LabTestSettingsService.inMemory().exportBackup();
     return BackupDocument(
       createdAt: createdAt ?? DateTime.now(),
       appVersion: appVersion,
-      snapshot: await repository.fetchSnapshot(),
+      snapshot: snapshot.copyWith(labTestSettings: labSettings),
     );
   }
 
@@ -476,10 +547,19 @@ class BackupService {
 
   Future<void> restoreBackup(BackupDocument document) async {
     final current = await repository.fetchSnapshot();
+    final currentLabSettings = labTestSettingsService?.exportBackup();
     try {
       await repository.replaceWith(document.snapshot);
+      if (document.snapshot.labTestSettings != null) {
+        await labTestSettingsService?.applyBackup(
+          document.snapshot.labTestSettings!,
+        );
+      }
     } catch (_) {
       await repository.replaceWith(current);
+      if (currentLabSettings != null) {
+        await labTestSettingsService?.applyBackup(currentLabSettings);
+      }
       rethrow;
     }
   }

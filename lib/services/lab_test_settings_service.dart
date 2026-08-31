@@ -14,6 +14,126 @@ class DuplicateLabTestDefinitionException implements Exception {
   const DuplicateLabTestDefinitionException();
 }
 
+class LabTestSettingsBackup {
+  const LabTestSettingsBackup({
+    required this.managementType,
+    required this.enabledLabTestIds,
+    required this.customDefinitions,
+  });
+
+  final LabManagementType managementType;
+  final List<String> enabledLabTestIds;
+  final List<LabTestDefinition> customDefinitions;
+
+  Map<String, Object?> toJson() {
+    return {
+      'managementType': managementType.id,
+      'enabledLabTestIds': enabledLabTestIds,
+      'customDefinitions': customDefinitions
+          .map((definition) => definition.toJson())
+          .toList(),
+    };
+  }
+
+  factory LabTestSettingsBackup.fromJson(Map<String, Object?> json) {
+    final managementType = _readManagementType(json['managementType']);
+    final enabledLabTestIds = _readStringList(json['enabledLabTestIds']);
+    final customDefinitions = _readCustomDefinitions(json['customDefinitions']);
+    _validate(managementType, enabledLabTestIds, customDefinitions);
+    return LabTestSettingsBackup(
+      managementType: managementType,
+      enabledLabTestIds: enabledLabTestIds,
+      customDefinitions: customDefinitions,
+    );
+  }
+
+  static LabManagementType _readManagementType(Object? value) {
+    if (value is! String) {
+      throw const FormatException('Invalid lab settings management type.');
+    }
+    for (final type in LabManagementType.values) {
+      if (type.id == value) {
+        return type;
+      }
+    }
+    throw const FormatException('Invalid lab settings management type.');
+  }
+
+  static List<String> _readStringList(Object? value) {
+    if (value is! List) {
+      throw const FormatException('Invalid lab settings enabled IDs.');
+    }
+    return [
+      for (final item in value)
+        if (item is String)
+          item
+        else
+          throw const FormatException('Invalid lab settings enabled IDs.'),
+    ];
+  }
+
+  static List<LabTestDefinition> _readCustomDefinitions(Object? value) {
+    if (value is! List) {
+      throw const FormatException('Invalid custom lab definitions.');
+    }
+    try {
+      return [
+        for (final item in value)
+          if (item is Map<String, Object?>)
+            LabTestDefinition.fromJson(item)
+          else if (item is Map)
+            LabTestDefinition.fromJson(Map<String, Object?>.from(item))
+          else
+            throw const FormatException('Invalid custom lab definitions.'),
+      ];
+    } on FormatException {
+      rethrow;
+    } catch (_) {
+      throw const FormatException('Invalid custom lab definitions.');
+    }
+  }
+
+  static void _validate(
+    LabManagementType managementType,
+    List<String> enabledLabTestIds,
+    List<LabTestDefinition> customDefinitions,
+  ) {
+    final predefinedIds = {
+      for (final definition in predefinedLabTestDefinitions) definition.id,
+    };
+    final validIds = Set<String>.of(predefinedIds);
+    final seenCustomNames = <String>{};
+
+    for (final definition in customDefinitions) {
+      if (!definition.id.startsWith('custom-') ||
+          definition.displayName.trim().isEmpty ||
+          predefinedIds.contains(definition.id) ||
+          validIds.contains(definition.id) ||
+          (definition.defaultUnit != null && definition.defaultUnit!.isEmpty)) {
+        throw const FormatException('Invalid custom lab definitions.');
+      }
+      final normalizedName = definition.displayName.trim().toLowerCase();
+      final predefinedNameExists = predefinedLabTestDefinitions.any(
+        (item) => item.displayName.trim().toLowerCase() == normalizedName,
+      );
+      if (predefinedNameExists || !seenCustomNames.add(normalizedName)) {
+        throw const FormatException('Invalid custom lab definitions.');
+      }
+      validIds.add(definition.id);
+    }
+
+    final seenEnabledIds = <String>{};
+    for (final id in enabledLabTestIds) {
+      if (!validIds.contains(id) || !seenEnabledIds.add(id)) {
+        throw const FormatException('Invalid lab settings enabled IDs.');
+      }
+    }
+    if (!defaultLabTestIdsByManagementType.containsKey(managementType)) {
+      throw const FormatException('Invalid lab settings management type.');
+    }
+  }
+}
+
 class LabTestSettingsService extends ChangeNotifier {
   LabTestSettingsService([this._preferences]) : _persistent = true;
 
@@ -61,6 +181,24 @@ class LabTestSettingsService extends ChangeNotifier {
       ..clear()
       ..addAll(_readCustomDefinitions(_preferences!));
     _enabledLabTestIds = _readEnabledLabTestIds(_preferences!);
+    notifyListeners();
+  }
+
+  LabTestSettingsBackup exportBackup() {
+    return LabTestSettingsBackup(
+      managementType: _managementType,
+      enabledLabTestIds: List.of(_enabledLabTestIds),
+      customDefinitions: List.of(_customDefinitions),
+    );
+  }
+
+  Future<void> applyBackup(LabTestSettingsBackup settings) async {
+    _managementType = settings.managementType;
+    _customDefinitions
+      ..clear()
+      ..addAll(settings.customDefinitions);
+    _enabledLabTestIds = _validUniqueIds(settings.enabledLabTestIds);
+    await _persist();
     notifyListeners();
   }
 

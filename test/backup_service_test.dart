@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_health_log/models/exercise_record.dart';
 import 'package:my_health_log/models/health_record.dart';
+import 'package:my_health_log/models/lab_test_definition.dart';
 import 'package:my_health_log/models/lab_result.dart';
 import 'package:my_health_log/models/medication.dart';
 import 'package:my_health_log/models/symptom.dart';
 import 'package:my_health_log/services/backup_service.dart';
+import 'package:my_health_log/services/lab_test_settings_service.dart';
 
 void main() {
   group('BackupService', () {
@@ -21,7 +23,8 @@ void main() {
 
       expect(decoded.appVersion, 'test-version');
       expect(decoded.totalCount, 0);
-      expect(decoded.toJson()['backupVersion'], 5);
+      expect(decoded.toJson()['backupVersion'], 6);
+      expect(decoded.snapshot.labTestSettings, isNotNull);
       expect(decoded.snapshot.healthRecords, isEmpty);
       expect(decoded.snapshot.medications, isEmpty);
       expect(decoded.snapshot.medicationLogs, isEmpty);
@@ -250,7 +253,7 @@ void main() {
         restored.prnSymptomLinks.single.symptomDefinitionId,
         'symptom-user-neck-pain',
       );
-      expect(restored.toJson(), original.toJson());
+      expect(_snapshotJson(restored), _snapshotJson(original));
     });
 
     test('symptom records round-trip with severity', () async {
@@ -326,7 +329,7 @@ void main() {
     });
 
     test('legacy backup versions restore with empty symptom and exercise collections', () async {
-      for (final version in [1, 2, 3, 4]) {
+      for (final version in [1, 2, 3, 4, 5]) {
         final repository = InMemoryBackupRepository(
           _symptomSnapshot(idSuffix: 'stale-$version'),
         );
@@ -345,6 +348,7 @@ void main() {
             if (version >= 4) 'symptomDefinitions': <Object?>[],
             if (version >= 4) 'symptomRecords': <Object?>[],
             if (version >= 4) 'prnSymptomLinks': <Object?>[],
+            if (version >= 5) 'exerciseRecords': <Object?>[],
             'labResults': <Object?>[],
           },
         });
@@ -398,6 +402,95 @@ void main() {
       expect(
         () => service.validateBackup(
           _version5BackupJson(omitKey: 'exerciseRecords'),
+        ),
+        throwsA(isA<BackupValidationException>()),
+      );
+    });
+
+    test('lab settings round-trip through backup restore', () async {
+      final originalSettings = LabTestSettingsService.inMemory();
+      await originalSettings.load();
+      await originalSettings.setManagementType(LabManagementType.dialysis);
+      final activeCustom = await originalSettings.addCustomDefinition(
+        displayName: 'Donor-specific antibody',
+        defaultUnit: 'MFI',
+      );
+      final disabledCustom = await originalSettings.addCustomDefinition(
+        displayName: 'No Unit Marker',
+      );
+      await originalSettings.setEnabledLabTestIds(['ktv', activeCustom.id]);
+
+      final repository = InMemoryBackupRepository(_snapshot());
+      final service = BackupService(
+        repository: repository,
+        labTestSettingsService: originalSettings,
+      );
+      final backup = await service.createBackup(createdAt: _dateTime());
+      final decoded = service.validateBackup(backup.toPrettyJson());
+
+      final settings = decoded.snapshot.labTestSettings!;
+      expect(settings.managementType, LabManagementType.dialysis);
+      expect(settings.enabledLabTestIds, ['ktv', activeCustom.id]);
+      expect(settings.customDefinitions.map((definition) => definition.id), [
+        activeCustom.id,
+        disabledCustom.id,
+      ]);
+      expect(
+        settings.customDefinitions.first.displayName,
+        'Donor-specific antibody',
+      );
+      expect(settings.customDefinitions.first.defaultUnit, 'MFI');
+      expect(settings.customDefinitions.last.displayName, 'No Unit Marker');
+      expect(settings.customDefinitions.last.defaultUnit, isNull);
+
+      await originalSettings.setManagementType(LabManagementType.generalHealth);
+      await originalSettings.setEnabledLabTestIds(['creatinine']);
+      await service.restoreBackup(decoded);
+
+      expect(originalSettings.managementType, LabManagementType.dialysis);
+      expect(originalSettings.enabledLabTestIds, ['ktv', activeCustom.id]);
+      expect(originalSettings.customDefinitions.last.id, disabledCustom.id);
+      expect(
+        originalSettings.enabledLabTestIds,
+        isNot(contains(disabledCustom.id)),
+      );
+    });
+
+    test('backup version 6 requires valid lab settings payload', () {
+      final service = BackupService(repository: InMemoryBackupRepository());
+
+      expect(
+        () =>
+            service.validateBackup(_version6BackupJson(omitLabSettings: true)),
+        throwsA(isA<BackupValidationException>()),
+      );
+      expect(
+        () => service.validateBackup(
+          _version6BackupJson(labSettings: {'managementType': 'dialysis'}),
+        ),
+        throwsA(isA<BackupValidationException>()),
+      );
+      expect(
+        () => service.validateBackup(
+          _version6BackupJson(
+            labSettings: {
+              'managementType': 'dialysis',
+              'enabledLabTestIds': ['custom-missing'],
+              'customDefinitions': <Object?>[],
+            },
+          ),
+        ),
+        throwsA(isA<BackupValidationException>()),
+      );
+      expect(
+        () => service.validateBackup(
+          _version6BackupJson(
+            labSettings: {
+              'managementType': 'not-real',
+              'enabledLabTestIds': <Object?>[],
+              'customDefinitions': <Object?>[],
+            },
+          ),
         ),
         throwsA(isA<BackupValidationException>()),
       );
@@ -518,6 +611,45 @@ void main() {
 
       final restored = await repository.fetchSnapshot();
       expect(_snapshotJson(restored), _snapshotJson(original));
+    });
+
+    test('keeps existing lab settings when restore fails', () async {
+      final originalSettings = LabTestSettingsService.inMemory();
+      await originalSettings.load();
+      await originalSettings.setManagementType(
+        LabManagementType.liverTransplant,
+      );
+      await originalSettings.setEnabledLabTestIds(['ast', 'alt']);
+      final replacementSettings = LabTestSettingsBackup(
+        managementType: LabManagementType.dialysis,
+        enabledLabTestIds: const ['ktv'],
+        customDefinitions: const [],
+      );
+      final repository = _FailingRestoreRepository(
+        _snapshot(idSuffix: 'original'),
+      );
+      final service = BackupService(
+        repository: repository,
+        labTestSettingsService: originalSettings,
+      );
+
+      expect(
+        () => service.restoreBackup(
+          BackupDocument(
+            createdAt: _dateTime(),
+            appVersion: '1',
+            snapshot: _snapshot(idSuffix: 'replacement')
+                .copyWith(labTestSettings: replacementSettings),
+          ),
+        ),
+        throwsException,
+      );
+
+      expect(
+        originalSettings.managementType,
+        LabManagementType.liverTransplant,
+      );
+      expect(originalSettings.enabledLabTestIds, ['ast', 'alt']);
     });
   });
 }
@@ -822,4 +954,36 @@ String _version5BackupJson({required String omitKey}) {
 DateTime _dateTime() => DateTime(2026, 8, 24, 10, 30, 45);
 
 Map<String, Object?> _snapshotJson(BackupSnapshot snapshot) =>
-    snapshot.toJson();
+    Map<String, Object?>.of(snapshot.toJson())..remove('labTestSettings');
+
+String _version6BackupJson({
+  bool omitLabSettings = false,
+  Map<String, Object?>? labSettings,
+}) {
+  return jsonEncode({
+    'app': 'My Health Log',
+    'backupVersion': 6,
+    'createdAt': '2026-08-24T10:30:45.000',
+    'appVersion': '1.0.1+2',
+    'data': {
+      'healthRecords': <Object?>[],
+      'medications': <Object?>[],
+      'medicationLogs': <Object?>[],
+      'prnMedicationLogs': <Object?>[],
+      'medicationDoseHistory': <Object?>[],
+      'symptomDefinitions': <Object?>[],
+      'symptomRecords': <Object?>[],
+      'prnSymptomLinks': <Object?>[],
+      'exerciseRecords': <Object?>[],
+      'labResults': <Object?>[],
+      if (!omitLabSettings)
+        'labTestSettings':
+            labSettings ??
+            {
+              'managementType': 'general_health',
+              'enabledLabTestIds': ['creatinine'],
+              'customDefinitions': <Object?>[],
+            },
+    },
+  });
+}

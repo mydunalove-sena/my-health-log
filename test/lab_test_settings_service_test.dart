@@ -216,6 +216,33 @@ void main() {
     expect(service.enabledLabTestIds, ['creatinine']);
   });
 
+  test('backup payload apply persists management, enabled IDs, and custom definitions', () async {
+    final service = await _persistentService();
+    const definition = LabTestDefinition(
+      id: 'custom-backup-marker',
+      displayName: 'Backup Marker',
+      defaultUnit: null,
+    );
+
+    await service.applyBackup(
+      const LabTestSettingsBackup(
+        managementType: LabManagementType.custom,
+        enabledLabTestIds: ['custom-backup-marker'],
+        customDefinitions: [definition],
+      ),
+    );
+    final reloaded = await _persistentService();
+
+    expect(reloaded.managementType, LabManagementType.custom);
+    expect(reloaded.enabledLabTestIds, ['custom-backup-marker']);
+    expect(reloaded.customDefinitions.single.id, definition.id);
+    expect(
+      reloaded.customDefinitions.single.displayName,
+      definition.displayName,
+    );
+    expect(reloaded.customDefinitions.single.defaultUnit, isNull);
+  });
+
   test('LabResult remains separate from lab test definitions', () {
     const definition = LabTestDefinition(
       id: 'sample',

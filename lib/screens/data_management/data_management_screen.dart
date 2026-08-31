@@ -4,6 +4,7 @@ import '../../services/backup_service.dart';
 import '../../services/exercise_service.dart';
 import '../../services/health_record_service.dart';
 import '../../services/lab_result_service.dart';
+import '../../services/lab_test_settings_service.dart';
 import '../../services/medication_service.dart';
 import '../../services/symptom_service.dart';
 
@@ -14,6 +15,7 @@ class DataManagementScreen extends StatefulWidget {
     required this.healthRecordService,
     required this.medicationService,
     required this.labResultService,
+    required this.labTestSettingsService,
     required this.symptomService,
     required this.exerciseService,
   });
@@ -22,6 +24,7 @@ class DataManagementScreen extends StatefulWidget {
   final HealthRecordService healthRecordService;
   final MedicationService medicationService;
   final LabResultService labResultService;
+  final LabTestSettingsService labTestSettingsService;
   final SymptomService symptomService;
   final ExerciseService exerciseService;
 
@@ -142,6 +145,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
         widget.healthRecordService.load(),
         widget.medicationService.load(),
         widget.labResultService.load(),
+        widget.labTestSettingsService.load(),
         widget.symptomService.load(),
         widget.exerciseService.load(),
       ]);
