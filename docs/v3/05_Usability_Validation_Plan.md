@@ -69,22 +69,20 @@ It does not evaluate:
 
 ## 5. Recruitment Approach
 
-The first possible contact point is a Severance coordinator.
+The recruitment method is **not fixed yet**.
 
-The initial approach should be a light request for advice, not a request to immediately recruit patients or run a formal hospital test.
+At the current stage:
 
-Suggested purpose:
+- no specific organization, institution, community, or intermediary is selected
+- no participant-recruitment route is treated as decided
+- recruitment should not begin until the distributable Android build and participant-facing materials are ready
+- the method should be chosen later based on practicality, participant burden, privacy, and the ability to collect usability feedback safely
 
-> I made a personal health-record app because I needed one myself and have been using it. I would like to find out whether a small number of other kidney-transplant or dialysis users could also use it comfortably and give feedback about inconveniences. I would like to ask what kind of approach would be appropriate or possible.
+The usability-validation plan remains valid even while the recruitment route is undecided.
 
-At this stage, the following are not assumed:
+Principle:
 
-- that the hospital can recruit users
-- that the coordinator can introduce patients
-- that hospital approval is or is not required
-- that a formal test can be conducted through the hospital
-
-Those points remain unconfirmed until the coordinator or relevant institution provides guidance.
+> Decide the recruitment method only when external validation is actually ready to begin.
 
 ## 6. Participant Count and Usage Period
 
@@ -93,7 +91,6 @@ The exact participant count and usage period are **not fixed yet**.
 They should be decided only after confirming:
 
 - realistic recruitment method
-- coordinator feedback
 - participant burden
 - distribution method
 - whether users can install and use the Android APK
@@ -361,7 +358,6 @@ The portfolio should not claim:
 - that all dialysis users have the same need
 - that the app improves health outcomes
 - that an untested transplant group has been validated
-- that a hospital formally endorsed the app unless such endorsement actually exists
 
 ## 16. Success Criteria for This Validation
 
@@ -401,9 +397,8 @@ Before actual participant validation:
 2. prepare a short installation guide
 3. prepare a short participant-facing app explanation
 4. prepare a feedback / observation sheet
-5. prepare a coordinator inquiry message or one-page explanation
-6. confirm realistic recruitment / distribution method
-7. only then decide participant count and usage period
+5. confirm a realistic recruitment / distribution method when external validation is ready
+6. only then decide participant count and usage period
 
 ## 19. Out of Scope
 
