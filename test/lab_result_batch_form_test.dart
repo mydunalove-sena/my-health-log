@@ -313,6 +313,7 @@ Future<void> _pickVisibleDay(WidgetTester tester, DateTime date) async {
   await tester.pumpAndSettle();
   final calendar = find.byType(CalendarDatePicker);
   expect(calendar, findsOneWidget);
+  await _showMonth(tester, date);
   final day = find
       .descendant(of: calendar, matching: find.text('${date.day}'))
       .hitTestable();
@@ -332,4 +333,28 @@ Future<void> _pickVisibleDay(WidgetTester tester, DateTime date) async {
   expect(okButton, findsOneWidget);
   await tester.tap(okButton);
   await tester.pumpAndSettle();
+}
+
+Future<void> _showMonth(WidgetTester tester, DateTime date) async {
+  final now = DateTime.now();
+  final currentMonth = DateTime(now.year, now.month);
+  final targetMonth = DateTime(date.year, date.month);
+  final monthDelta =
+      (targetMonth.year - currentMonth.year) * 12 +
+      targetMonth.month -
+      currentMonth.month;
+  if (monthDelta == 0) {
+    return;
+  }
+
+  final dialog = find.byType(DatePickerDialog);
+  final context = tester.element(dialog);
+  final localizations = MaterialLocalizations.of(context);
+  final tooltip = monthDelta < 0
+      ? localizations.previousMonthTooltip
+      : localizations.nextMonthTooltip;
+  for (var i = 0; i < monthDelta.abs(); i++) {
+    await tester.tap(find.byTooltip(tooltip));
+    await tester.pumpAndSettle();
+  }
 }
