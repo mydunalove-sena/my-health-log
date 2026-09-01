@@ -410,7 +410,7 @@ Applies to HealthRecord and LabResult.
 ### Explicit Statistics Aliases
 
 - V340-LAB-ALIAS-01: Statistics treats `HDL-Cholesterol` as an alias of canonical `HDL Cholesterol`.
-- V340-LAB-ALIAS-02: Statistics treats `Inorganic P(??` as an alias of canonical `P(??`.
+- V340-LAB-ALIAS-02: Statistics treats `Inorganic P(인)` as an alias of canonical `P(인)`.
 - V340-LAB-ALIAS-03: The Statistics selector displays the canonical name instead of splitting these known aliases into separate selectable series.
 - V340-LAB-ALIAS-04: Selecting a canonical statistic includes rows stored under that canonical name and its explicit aliases.
 - V340-LAB-ALIAS-05: Existing `LabResult.testName` values are not rewritten or migrated.
@@ -432,7 +432,7 @@ Applies to HealthRecord and LabResult.
 - V350-PRN-HOME-01: Home displays a PRN medication summary only when an actual PRN dose for that medication is stored on the current date.
 - V350-PRN-HOME-02: A registered PRN medication with no PRN log today is not displayed as a missed dose, recommendation, or required action on Home.
 - V350-PRN-HOME-03: The Home PRN summary displays today's stored dose count and logged time values.
-- V350-PRN-HOME-04: The PRN action label is `蹂듭슜` when no log exists today and `異붽? 蹂듭슜` after one or more logs exist today.
+- V350-PRN-HOME-04: The PRN action label is `복용` when no log exists today and `추가 복용` after one or more logs exist today.
 - V350-PRN-HOME-05: Additional PRN doses create independent `PrnMedicationLog` rows and do not overwrite earlier same-day logs.
 
 ### Historical Scheduled Medication Correction
@@ -468,9 +468,9 @@ Applies to HealthRecord and LabResult.
 - V351-HEALTH-LIST-02: Health record list cards display sleep hours when the sleep field is enabled.
 - V351-HEALTH-LIST-03: List summary order is weight, blood pressure, water, sleep, and condition.
 - V351-HEALTH-LIST-04: Water displays with the `mL` unit and thousands separators when a value exists.
-- V351-HEALTH-LIST-05: Missing water displays `湲곕줉 ?놁쓬`.
-- V351-HEALTH-LIST-06: Sleep displays with the existing decimal display policy and the `?쒓컙` unit when a value exists.
-- V351-HEALTH-LIST-07: Missing sleep displays `湲곕줉 ?놁쓬`.
+- V351-HEALTH-LIST-05: Missing water displays `기록 없음`.
+- V351-HEALTH-LIST-06: Sleep displays with the existing decimal display policy and the `시간` unit when a value exists.
+- V351-HEALTH-LIST-07: Missing sleep displays `기록 없음`.
 - V351-HEALTH-LIST-08: Water and sleep list lines follow the existing health-field visibility settings.
 - V351-HEALTH-LIST-09: Hiding water or sleep removes only that summary line and does not change other health-record values.
 
