@@ -422,6 +422,218 @@ This check is recorded separately from the strengthened device QA count above. T
 - Confirmed app functional failures: 0.
 - Real-device full DB Restore round-trip was not run to protect existing user data. Backup/Restore round-trip is covered by automated regression; real-device QA covered Backup V5 serialization only.
 
+## V3.2.0 Lab Result Entry / Lab Test Settings
+
+### Lab Test Settings / Batch Entry
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V320-LAB-TC-01 | Settings | Open lab-test settings | Management-type controls and lab-test definitions are shown |
+| V320-LAB-TC-02 | Settings | Select one of the seven management types | Selected type is stored and its preset can be applied |
+| V320-LAB-TC-03 | Settings | Enable/disable predefined tests | Enabled list updates and persists |
+| V320-LAB-TC-04 | Custom test | Add a valid custom lab-test name and optional unit | Custom definition is stored and enabled |
+| V320-LAB-TC-05 | Custom validation | Add blank custom name | Rejected |
+| V320-LAB-TC-06 | Custom validation | Add duplicate predefined/custom name with case/space variation | Rejected |
+| V320-LAB-TC-07 | Custom unit | Add custom test with blank unit | Stored with `defaultUnit == null` |
+| V320-LAB-TC-08 | Batch entry | Open new lab-result registration | Multi-entry screen opens for one selected date |
+| V320-LAB-TC-09 | Batch entry | View enabled lab rows | Enabled test names and configured default units are shown |
+| V320-LAB-TC-10 | Batch entry | Existing same-date results exist | Existing values are prefilled by `testName` |
+| V320-LAB-TC-11 | Batch save | Enter values for multiple enabled tests | Non-empty rows are saved in one action |
+| V320-LAB-TC-12 | Batch update | Save an existing same-date/test-name value | Existing row is updated; `id`/`createdAt` remain and `updatedAt` changes |
+| V320-LAB-TC-13 | Batch blank | Leave a new row empty | No new `LabResult` row is created |
+| V320-LAB-TC-14 | Existing row clear | Clear a prefilled value in batch UI | Existing DB row is not automatically deleted |
+| V320-LAB-TC-15 | Disabled historical test | Disable a test that already has results | Existing result remains visible in list/detail/Statistics |
+| V320-LAB-TC-16 | Compatibility | Use V3.2 settings/batch flow | databaseVersion 8, backupVersion 5, LabResult schema unchanged |
+
+### V3.2.0 Confirmed QA
+
+- Full `flutter test`: PASS, 243 tests.
+- `flutter analyze`: PASS.
+- `git diff --check`: PASS.
+- Android SM-S918N update-install / existing-data smoke: PASS.
+- Batch lab-entry screen, default units, settings screen, management type, predefined checkboxes, custom-test dialog, scroll/full-save access: PASS.
+- Custom-test dialog smoke was cancelled; no dummy custom test was saved during device QA.
+- Launch stability: PASS, 3/3; filtered logcat showed no app `FATAL EXCEPTION`.
+- Confirmed defects: none.
+- BLOCKED: 0.
+
+## V3.3.0 Yearly Lab Statistics
+
+### Yearly Statistics
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V330-STAT-TC-01 | Year selector | Open Lab Statistics | Current year is selected by default |
+| V330-STAT-TC-02 | Year selector | Stored results contain one or more years | Available stored years are represented by the selector |
+| V330-STAT-TC-03 | Filtering | Select lab test + year | Only matching test/year results are displayed |
+| V330-STAT-TC-04 | Full-year results | Selected year has many results | All matching original results are shown; no recent-N truncation |
+| V330-STAT-TC-05 | Sampling policy | Selected year has repeated monthly results | Results are not replaced by monthly averages/sampling |
+| V330-STAT-TC-06 | Chart order | View chart | Oldest -> newest |
+| V330-STAT-TC-07 | List order | View value list | Newest -> oldest |
+| V330-STAT-TC-08 | Dense data | Many results exist in year | Chart remains reachable through horizontal scrolling |
+| V330-STAT-TC-09 | Disabled test | Historical rows exist for disabled test | Test remains available in Statistics |
+| V330-STAT-TC-10 | Exact-name scope | Differently named aliases exist | V3.3 keeps exact-name grouping; alias normalization is not fabricated |
+
+### V3.3.0 Confirmed QA
+
+- Statistics focused tests: PASS, 30/30.
+- Related regression bundle: PASS, 115/115.
+- Full `flutter test`: PASS, 246/246.
+- `flutter analyze`: PASS.
+- `git diff --check`: PASS.
+- Android SM-S918N User 0 update-install and existing-data preservation: PASS.
+- 2026 Creatinine: 02/03, 05/12, 08/11 all visible.
+- 2026 BUN: 02/03, 05/12, 08/11 all visible.
+- 2026 Tacrolimus: stored 2026 values including latest August result visible.
+- Year selector / chart / list / scrolling / portrait overflow smoke: PASS.
+- Launch stability: PASS, 3/3; no app `FATAL EXCEPTION`.
+- Confirmed defects: none.
+- BLOCKED: 0.
+
+## V3.4.0 Lab Input Visibility / Statistics Aliases
+
+### Numeric Input Visibility / Alias Handling
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V340-LAB-TC-01 | Numeric field | Enter `22.3` | Full string remains visible before save |
+| V340-LAB-TC-02 | Numeric field | Enter `1.31` | Full string remains visible before save |
+| V340-LAB-TC-03 | Numeric field | Enter `6.79` | Full string remains visible before save |
+| V340-LAB-TC-04 | Numeric field | Enter `10.4` | Full string remains visible before save |
+| V340-LAB-TC-05 | Numeric field | Enter `292` | Full string remains visible before save |
+| V340-LAB-TC-06 | Save regression | Save decimal result such as `22.3` | Stored numeric value remains correct |
+| V340-ALIAS-TC-01 | HDL alias | Only `HDL Cholesterol` exists | Canonical HDL statistics display normally |
+| V340-ALIAS-TC-02 | HDL alias | Only `HDL-Cholesterol` exists | Included in canonical `HDL Cholesterol` statistics |
+| V340-ALIAS-TC-03 | HDL alias | Both names exist on different dates | One canonical series includes both |
+| V340-ALIAS-TC-04 | P alias | Only `P(인)` exists | Canonical P statistics display normally |
+| V340-ALIAS-TC-05 | P alias | Only `Inorganic P(인)` exists | Included in canonical `P(인)` statistics |
+| V340-ALIAS-TC-06 | P alias | Both names exist on different dates | One canonical series includes both |
+| V340-ALIAS-TC-07 | Same-date duplicate | Canonical and alias rows exist on same date | Both stored rows remain visible; no merge/overwrite/delete |
+| V340-ALIAS-TC-08 | Custom test scope | Similar custom test name exists | No fuzzy alias normalization is applied |
+| V340-ALIAS-TC-09 | Regression | Creatinine/BUN/Tacrolimus 2026 data exists | Existing yearly statistics remain intact |
+
+### V3.4.0 Confirmed QA
+
+- Focused lab-safety tests: PASS, 16/16.
+- Related regression bundle: PASS, 124/124.
+- Full `flutter test`: PASS, 262/262.
+- `flutter analyze`: initial unused-import test issue fixed; final PASS.
+- `git diff --check`: PASS.
+- Release APK build: PASS.
+- Final Android SM-S918N User 0 update-install: PASS; User 95 package absent.
+- Numeric input UI smoke with `1.31`, `22.3`, `6.79`, `10.4`, `292`: PASS.
+- `HDL Cholesterol` 2026 included alias row stored as `HDL-Cholesterol`: PASS.
+- `P(인)` 2026 included alias row stored as `Inorganic P(인)`: PASS.
+- Creatinine/BUN/Tacrolimus latest-August regression: PASS.
+- Launch stability: PASS, 3/3; no app `FATAL EXCEPTION`.
+- Final confirmed defects: none.
+- Final BLOCKED: 0.
+
+## V3.5.0 Medication History / PRN UX
+
+### Home PRN / History Correction
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V350-PRN-TC-01 | Home PRN | PRN medication exists but no log today | No missed-dose/recommendation summary is fabricated |
+| V350-PRN-TC-02 | Home PRN | One actual PRN log exists today | Home shows stored PRN summary with count/time |
+| V350-PRN-TC-03 | PRN action | No PRN log exists today | Action label is `복용` |
+| V350-PRN-TC-04 | PRN action | One or more PRN logs exist today | Action label is `추가 복용` |
+| V350-PRN-TC-05 | Multiple PRN | Record another same-day PRN dose | New log is inserted; prior log is not overwritten |
+| V350-MED-HIST-TC-01 | Scheduled history | Add a missing scheduled log for a past date | Selected historical date/time are preserved |
+| V350-MED-HIST-TC-02 | Scheduled edit | Edit an existing scheduled log | Existing `id`/`createdAt` preserved; `updatedAt` refreshed |
+| V350-MED-HIST-TC-03 | Historical dose | Safe past dose cannot be determined | Current dose is not fabricated as historical snapshot |
+| V350-PRN-HIST-TC-01 | PRN history | Add a missing PRN log for a selected date | New PRN history row is stored |
+| V350-PRN-HIST-TC-02 | PRN edit | Edit date/time/dose/unit/note/symptoms | Existing row is updated while identity/history fields are preserved |
+| V350-PRN-HIST-TC-03 | Symptom links | Edit one PRN log's related symptoms | Only that PRN log's links are replaced |
+| V350-PRN-HIST-TC-04 | Interpretation scope | PRN symptom link exists | Display remains neutral; no cause/effect/medical advice is inferred |
+
+### V3.5.0 Confirmed QA
+
+- Focused V3.5 medication PRN/history tests: PASS, 15/15.
+- Related regression bundle: PASS, 110/110.
+- Full `flutter test`: PASS, 277/277.
+- `flutter analyze`: PASS.
+- `git diff --check`: PASS.
+- Release APK build: PASS.
+- Android SM-S918N User 0 update-install: PASS; User 95 package absent.
+- Existing health/lab/medication/symptom data preservation smoke: PASS.
+- Home actual-today PRN count/time display: PASS.
+- Medication-history missing-log action and scheduled/PRN edit-form smoke: PASS; no destructive save was required for smoke.
+- Launch stability: PASS, 3/3; no app `FATAL EXCEPTION`.
+- Confirmed defects: none.
+- BLOCKED: 0.
+
+## V3.5.1 Health Record List Hot Fix
+
+### Water / Sleep List Display
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V351-HEALTH-TC-01 | Water | Stored water value exists | Health list shows value with `mL` |
+| V351-HEALTH-TC-02 | Water null | Water is null | List shows `기록 없음` |
+| V351-HEALTH-TC-03 | Water format | Water is `1500` | List shows `1,500 mL` |
+| V351-HEALTH-TC-04 | Sleep | Stored sleep value exists | Health list shows value with `시간` |
+| V351-HEALTH-TC-05 | Sleep null | Sleep is null | List shows `기록 없음` |
+| V351-HEALTH-TC-06 | Order | Record has all summary values | Order is weight -> blood pressure -> water -> sleep -> condition |
+| V351-HEALTH-TC-07 | Visibility | Water setting OFF/ON | Only water line hides/restores |
+| V351-HEALTH-TC-08 | Visibility | Sleep setting OFF/ON | Only sleep line hides/restores |
+| V351-HEALTH-TC-09 | Regression | Tap health record | Existing edit navigation still works |
+
+### V3.5.1 Confirmed QA
+
+- Focused health display/visibility tests: PASS, 17/17.
+- Related regression bundle: PASS, 48/48.
+- Full `flutter test`: PASS, 281/281.
+- `flutter analyze`: PASS.
+- `git diff --check`: PASS.
+- Release APK build: PASS.
+- Android SM-S918N User 0 update-install: PASS; User 95 package absent.
+- Water/sleep values, null state, units, visibility OFF/ON, other-field regression and record edit navigation: PASS.
+- Existing data preservation: PASS.
+- Launch stability: PASS, 3/3; no app `FATAL EXCEPTION`.
+- Confirmed defects after hot fix: none.
+- BLOCKED: 0.
+
+## V3.6.0 Lab Settings Backup / Restore
+
+### Backup / Restore / Validation
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V360-BACKUP-TC-01 | Backup version | Create current backup | `backupVersion == 6` |
+| V360-BACKUP-TC-02 | Payload | Create v6 backup | `data.labTestSettings` exists |
+| V360-BACKUP-TC-03 | Settings round-trip | Backup management type | `managementType` is preserved |
+| V360-BACKUP-TC-04 | Settings round-trip | Backup enabled test IDs | Enabled IDs are preserved in order/valid set |
+| V360-BACKUP-TC-05 | Custom definition | Backup custom test with unit | id/name/unit round-trip |
+| V360-BACKUP-TC-06 | Custom null unit | Backup custom test without unit | `defaultUnit == null` round-trip |
+| V360-BACKUP-TC-07 | Predefined scope | Create backup | Predefined definitions are not duplicated as custom definitions |
+| V360-BACKUP-TC-08 | Legacy compatibility | Restore v1-v5 backup without lab settings | Restore is accepted |
+| V360-BACKUP-TC-09 | V6 validation | v6 backup omits `labTestSettings` | Rejected |
+| V360-BACKUP-TC-10 | V6 validation | Invalid management type | Rejected |
+| V360-BACKUP-TC-11 | V6 validation | Invalid/duplicate enabled ID relationship | Rejected |
+| V360-BACKUP-TC-12 | V6 validation | Invalid custom definition relationship | Rejected |
+| V360-RESTORE-TC-01 | Restore | Restore valid v6 lab settings | Applied through `LabTestSettingsService` |
+| V360-RESTORE-TC-02 | Persistence | Restore valid v6 settings | SharedPreferences persists restored state |
+| V360-RESTORE-TC-03 | Runtime refresh | Restore completes | Running settings service reloads without required app restart |
+| V360-RESTORE-TC-04 | Rollback | Restore fails after replacement begins | Previous DB snapshot is restored |
+| V360-RESTORE-TC-05 | Rollback | Previous lab settings existed and restore fails | Previous lab settings are reapplied |
+| V360-COMPAT-TC-01 | DB scope | Use V3.6 backup | databaseVersion remains 8; no DB migration |
+
+### V3.6.0 Confirmed QA
+
+- Related backup/data-management/settings/medication-history regression: PASS, 65/65.
+- Full `flutter test`: PASS, 285/285.
+- `flutter analyze`: PASS, No issues found.
+- `git diff --check`: PASS; line-ending warnings only.
+- Legacy backup v1, v2, v3, v4, v5 restore compatibility: PASS.
+- V6 lab settings payload / restore / reload / rollback / validation coverage: PASS.
+- `databaseVersion`: 8 unchanged.
+- `backupVersion`: 6.
+- Separate V3.6.0 Release APK build: not confirmed by the available final evidence.
+- Separate V3.6.0 Android device QA: not confirmed by the available final evidence.
+- Do not report V3.6 Release/device QA as PASS without new evidence.
+
 ## Regression
 
 | ID | Area | Scenario | Expected |
