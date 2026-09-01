@@ -1053,3 +1053,86 @@ This was classified as a Health record list UI display omission, not a storage, 
 ### Result
 
 V3.5.1 health record list hotfix passed focused tests, related regression, full regression, static analysis, release APK build verification, Android User 0 update-install QA, list display/visibility smoke QA, and launch stability checks. V3.5.1 keeps databaseVersion 8, backupVersion 5, the existing DB schema, and the existing backup payload unchanged.
+
+## 2026-08-31 - V3.6.0 Lab Settings Backup / Restore
+
+### Requirement
+
+V3.6.0 closes the confirmed backup gap introduced by V3.2 lab-test settings.
+
+Before V3.6.0, `LabResult` data was included in backup, but lab-test settings stored through `SharedPreferences` were not part of backupVersion 5. V3.6.0 therefore adds lab-test settings to the backup/restore contract while preserving existing database data and compatibility with older backup versions.
+
+The backed-up settings are limited to:
+
+- selected management type
+- enabled lab-test definition IDs
+- user-added custom lab-test definitions and optional units
+
+This change is configuration preservation only. It does not add medical interpretation, diagnosis, risk classification, treatment guidance, or medication guidance.
+
+### Implementation
+
+- Added `LabTestSettingsBackup`.
+- Added `labTestSettings` to `BackupSnapshot`.
+- Increased `BackupDocument.backupVersion` from 5 to 6.
+- Expanded supported backup versions to 1, 2, 3, 4, 5, and 6.
+- Backup v6 stores `data.labTestSettings`.
+- `labTestSettings` stores:
+  - `managementType`
+  - `enabledLabTestIds`
+  - `customDefinitions`
+- Custom definitions preserve:
+  - custom definition id
+  - display name
+  - optional default unit
+- `defaultUnit == null` is preserved through JSON round-trip.
+- Predefined lab-test definitions are not duplicated into the backup payload.
+- Backup creation exports current settings through `LabTestSettingsService`.
+- Valid v6 backups require a valid `labTestSettings` object.
+- Validation rejects invalid management types, invalid/duplicate enabled IDs, invalid custom definitions, and inconsistent relationships.
+- Backup versions 1 through 5 remain readable without `labTestSettings`.
+- Restore applies v6 lab settings through `LabTestSettingsService`.
+- Restored settings are persisted back to `SharedPreferences`.
+- Data Management reloads lab settings after restore so the running app reflects restored settings without requiring a restart.
+- Restore rollback keeps the prior DB snapshot.
+- If prior lab settings are available and restore fails, the prior settings snapshot is reapplied.
+- Existing health, medication, symptom, exercise, lab-result, and Statistics data structures remain unchanged.
+
+### Compatibility
+
+- App version is `3.6.0+12`.
+- databaseVersion remains 8.
+- backupVersion is 6.
+- No DB migration was added.
+- Existing `LabResult` schema remains unchanged.
+- Existing backup versions 1 through 5 remain supported.
+- Lab settings remain stored through `SharedPreferences`; V3.6 adds them to backup coverage rather than moving them into SQLite.
+
+### Automated QA
+
+- Related backup/data-management/settings/medication-history regression: 65 PASS, 0 FAIL.
+- Full regression, `flutter test`: 285 PASS, 0 FAIL.
+- `flutter analyze`: PASS, No issues found.
+- `git diff --check`: PASS; only line-ending warnings were observed.
+- Legacy backup v1 restore compatibility: PASS.
+- Legacy backup v2 restore compatibility: PASS.
+- Legacy backup v3 restore compatibility: PASS.
+- Legacy backup v4 restore compatibility: PASS.
+- Legacy backup v5 restore compatibility: PASS.
+- V6 lab-settings payload round-trip: PASS.
+- V6 custom definition / null-unit round-trip: PASS.
+- V6 validation for malformed or inconsistent lab settings: PASS.
+- Restore reload behavior: PASS.
+- Restore rollback behavior: PASS.
+
+### Release / Device Evidence Boundary
+
+- V3.6.0 feature code was committed to branch `v3`.
+- Feature commit: `efbfc06c1faabcc2bad39880190213f8f13c998d` (`fix: include lab settings in backup v6`).
+- Separate V3.6.0 Release APK build is not confirmed by the available final evidence.
+- Separate V3.6.0 Android device QA is not confirmed by the available final evidence.
+- Do not report V3.6.0 Release APK or Android device QA as PASS unless new evidence is produced.
+
+### Result
+
+V3.6.0 completed the lab-test-settings backup/restore gap with backupVersion 6 and passed the confirmed automated regression and static checks. The database schema remained at version 8, older backup versions remained supported, and no medical interpretation behavior was added.
