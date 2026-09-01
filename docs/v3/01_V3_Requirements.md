@@ -329,3 +329,186 @@ Applies to HealthRecord and LabResult.
 ### Excluded Scope
 
 - V310-EX-NON-01: V3.1.0 does not add GPS, distance, elevation, heart-rate capture, Samsung Health, Google Fit, exercise auto-detection, exercise goals, advanced exercise statistics, or custom exercise-type CRUD.
+
+## V3.2.0: Lab Result Entry / Lab Test Settings
+
+### Scope
+
+- V320-LAB-SCOPE-01: New lab-result registration uses a multi-entry flow for one selected lab date.
+- V320-LAB-SCOPE-02: Existing single-result edit and delete behavior remains available for already stored `LabResult` rows.
+- V320-LAB-SCOPE-03: V3.2.0 provides predefined lab-test definitions and user-configurable lab-test visibility without changing the stored `LabResult` schema.
+- V320-LAB-SCOPE-04: Management-type presets are input-convenience defaults only and must not be presented as medical requirements, diagnosis, treatment guidance, or normal/risk judgment.
+
+### Lab Test Settings
+
+- V320-LAB-SET-01: The app provides 31 predefined lab-test definitions.
+- V320-LAB-SET-02: The app provides seven management types: kidney transplant, dialysis, liver transplant, lung transplant, pancreas transplant, general health, and custom.
+- V320-LAB-SET-03: Each management type can provide a preset enabled-test set.
+- V320-LAB-SET-04: Changing management type can apply its preset after confirmation when the current enabled-test selection may be replaced.
+- V320-LAB-SET-05: A user can enable or disable individual predefined and custom lab tests.
+- V320-LAB-SET-06: Lab-test settings persist through `LabTestSettingsService` and `SharedPreferences`.
+- V320-LAB-SET-07: A user can add a custom lab-test definition with a display name and optional default unit.
+- V320-LAB-SET-08: Custom lab-test names are trimmed before saving.
+- V320-LAB-SET-09: Blank custom lab-test names are rejected.
+- V320-LAB-SET-10: Custom lab-test names are checked case-insensitively against predefined and existing custom definitions to prevent duplicates.
+- V320-LAB-SET-11: Custom default units are trimmed; a blank unit is stored as `null`.
+- V320-LAB-SET-12: A newly added custom lab test is enabled immediately.
+
+### Batch Lab Entry
+
+- V320-LAB-BATCH-01: The batch-entry screen displays only currently enabled lab-test definitions.
+- V320-LAB-BATCH-02: Each enabled row displays the lab-test name and configured default unit when a unit exists.
+- V320-LAB-BATCH-03: Definitions without a default unit must remain usable.
+- V320-LAB-BATCH-04: Existing results for the selected date are prefilled by `testName`.
+- V320-LAB-BATCH-05: Saving updates an existing same-date/same-test-name result and inserts a new result when no matching row exists.
+- V320-LAB-BATCH-06: Updating an existing result preserves its existing `id` and `createdAt` and refreshes `updatedAt`.
+- V320-LAB-BATCH-07: Blank new rows are not inserted.
+- V320-LAB-BATCH-08: Clearing a prefilled existing value in the batch screen does not automatically delete the stored `LabResult` row.
+- V320-LAB-BATCH-09: Disabling a lab test in settings does not delete or hide previously stored results from the lab list, detail screen, or Statistics.
+
+### Compatibility / Excluded Scope
+
+- V320-LAB-COMPAT-01: `databaseVersion` remains 8.
+- V320-LAB-COMPAT-02: `backupVersion` remains 5.
+- V320-LAB-COMPAT-03: `LabResult` and `lab_results` schema remain unchanged.
+- V320-LAB-COMPAT-04: V3.2.0 does not add a DB migration.
+- V320-LAB-COMPAT-05: V3.2.0 lab-test settings are app preferences and are not included in backupVersion 5.
+- V320-LAB-NON-01: V3.2.0 does not add OCR lab input.
+- V320-LAB-NON-02: V3.2.0 does not add automatic lab normal/risk judgment or medical interpretation.
+
+## V3.3.0: Yearly Lab Statistics
+
+### Year / Result Range
+
+- V330-STAT-01: Lab Statistics provides an explicit year selector.
+- V330-STAT-02: The default selected year is the current year.
+- V330-STAT-03: Lab Statistics filters results using both the selected lab `testName` and selected year.
+- V330-STAT-04: The selected year displays every matching stored `LabResult`; a recent-N-result limit must not remove results.
+- V330-STAT-05: Lab Statistics must not replace original stored results with monthly averages or sampling.
+- V330-STAT-06: Chart data is ordered from oldest to newest.
+- V330-STAT-07: The value list is ordered from newest to oldest.
+- V330-STAT-08: The chart area supports horizontal scrolling when many results exist in the selected year.
+- V330-STAT-09: A disabled lab test remains available as a Statistics series when historical `LabResult` rows for that test exist.
+- V330-STAT-10: V3.3.0 keeps exact `testName` grouping; alias/name normalization remains outside V3.3.0 scope.
+- V330-STAT-11: V3.3.0 does not add unit conversion.
+
+### Compatibility
+
+- V330-COMPAT-01: `databaseVersion` remains 8.
+- V330-COMPAT-02: `backupVersion` remains 5.
+- V330-COMPAT-03: `LabResult` schema and backup payload remain unchanged.
+- V330-COMPAT-04: V3.3.0 does not add a DB migration.
+
+## V3.4.0: Lab Input Visibility / Statistics Aliases
+
+### Numeric Input Safety
+
+- V340-LAB-INPUT-01: Multi-lab numeric input fields must keep the entered numeric string visible enough for pre-save verification.
+- V340-LAB-INPUT-02: Decimal values such as `1.31`, `22.3`, `6.79`, and `10.4` must not be visually truncated into misleading values.
+- V340-LAB-INPUT-03: V3.4.0 does not change batch save/update semantics or stored numeric values.
+
+### Explicit Statistics Aliases
+
+- V340-LAB-ALIAS-01: Statistics treats `HDL-Cholesterol` as an alias of canonical `HDL Cholesterol`.
+- V340-LAB-ALIAS-02: Statistics treats `Inorganic P(??` as an alias of canonical `P(??`.
+- V340-LAB-ALIAS-03: The Statistics selector displays the canonical name instead of splitting these known aliases into separate selectable series.
+- V340-LAB-ALIAS-04: Selecting a canonical statistic includes rows stored under that canonical name and its explicit aliases.
+- V340-LAB-ALIAS-05: Existing `LabResult.testName` values are not rewritten or migrated.
+- V340-LAB-ALIAS-06: If canonical and alias rows both exist on the same date, the app does not silently merge, overwrite, or delete either row.
+- V340-LAB-ALIAS-07: Alias handling is limited to explicit known mappings and does not introduce fuzzy matching.
+
+### Compatibility / Excluded Scope
+
+- V340-COMPAT-01: `databaseVersion` remains 8.
+- V340-COMPAT-02: `backupVersion` remains 5.
+- V340-COMPAT-03: `LabResult` schema and backup payload remain unchanged.
+- V340-COMPAT-04: V3.4.0 does not add a DB migration.
+- V340-NON-01: V3.4.0 does not add unit conversion, OCR input, normal/risk judgment, diagnosis, or treatment guidance.
+
+## V3.5.0: Medication History / PRN UX
+
+### Home PRN Display
+
+- V350-PRN-HOME-01: Home displays a PRN medication summary only when an actual PRN dose for that medication is stored on the current date.
+- V350-PRN-HOME-02: A registered PRN medication with no PRN log today is not displayed as a missed dose, recommendation, or required action on Home.
+- V350-PRN-HOME-03: The Home PRN summary displays today's stored dose count and logged time values.
+- V350-PRN-HOME-04: The PRN action label is `蹂듭슜` when no log exists today and `異붽? 蹂듭슜` after one or more logs exist today.
+- V350-PRN-HOME-05: Additional PRN doses create independent `PrnMedicationLog` rows and do not overwrite earlier same-day logs.
+
+### Historical Scheduled Medication Correction
+
+- V350-MED-HIST-01: Medication history allows a missing scheduled medication log to be added for a selected past date.
+- V350-MED-HIST-02: An existing scheduled medication log can be edited.
+- V350-MED-HIST-03: Historical scheduled correction preserves the selected date and selected actual `takenAt` instead of forcing the current time.
+- V350-MED-HIST-04: Editing an existing scheduled log preserves its `id` and `createdAt` and refreshes `updatedAt`.
+- V350-MED-HIST-05: When a safe historical dose cannot be known, the app does not fabricate a scheduled dose snapshot from the current medication dose.
+
+### Historical PRN Correction
+
+- V350-PRN-HIST-01: Medication history allows a missing PRN log to be added for a selected date.
+- V350-PRN-HIST-02: An existing PRN log can be edited.
+- V350-PRN-HIST-03: Editing a PRN log preserves its `id` and `createdAt` and refreshes `updatedAt`.
+- V350-PRN-HIST-04: PRN edit supports the stored date, time, dose, unit, note, and related-symptom selection.
+- V350-PRN-HIST-05: Updating related symptoms replaces links only for the edited PRN log and does not alter links belonging to other PRN logs.
+- V350-PRN-HIST-06: PRN symptom links remain neutral related-record links and must not be interpreted as cause, effect, improvement, worsening, diagnosis, risk, or medication advice.
+
+### Compatibility
+
+- V350-COMPAT-01: `databaseVersion` remains 8.
+- V350-COMPAT-02: `backupVersion` remains 5.
+- V350-COMPAT-03: Existing medication, PRN, and LabResult schemas remain unchanged.
+- V350-COMPAT-04: Backup payload remains unchanged.
+- V350-COMPAT-05: V3.5.0 does not add a DB migration or change the application/package identifier.
+
+## V3.5.1: Health Record List Hot Fix
+
+### Confirmed Display Defect / Fix
+
+- V351-HEALTH-LIST-01: Health record list cards display water intake when the water field is enabled.
+- V351-HEALTH-LIST-02: Health record list cards display sleep hours when the sleep field is enabled.
+- V351-HEALTH-LIST-03: List summary order is weight, blood pressure, water, sleep, and condition.
+- V351-HEALTH-LIST-04: Water displays with the `mL` unit and thousands separators when a value exists.
+- V351-HEALTH-LIST-05: Missing water displays `湲곕줉 ?놁쓬`.
+- V351-HEALTH-LIST-06: Sleep displays with the existing decimal display policy and the `?쒓컙` unit when a value exists.
+- V351-HEALTH-LIST-07: Missing sleep displays `湲곕줉 ?놁쓬`.
+- V351-HEALTH-LIST-08: Water and sleep list lines follow the existing health-field visibility settings.
+- V351-HEALTH-LIST-09: Hiding water or sleep removes only that summary line and does not change other health-record values.
+
+### Compatibility
+
+- V351-COMPAT-01: `databaseVersion` remains 8.
+- V351-COMPAT-02: `backupVersion` remains 5.
+- V351-COMPAT-03: `HealthRecord` schema and backup payload remain unchanged.
+- V351-COMPAT-04: V3.5.1 does not add a DB migration.
+- V351-COMPAT-05: V3.5.1 does not change health save/edit logic, Home health-card logic, Statistics, medication, lab, symptom, or backup behavior.
+
+## V3.6.0: Lab Settings Backup / Restore
+
+### Backup Payload
+
+- V360-BACKUP-01: `backupVersion` increases from 5 to 6.
+- V360-BACKUP-02: Supported backup versions are 1, 2, 3, 4, 5, and 6.
+- V360-BACKUP-03: Backup v6 includes `data.labTestSettings`.
+- V360-BACKUP-04: `labTestSettings` stores `managementType`, `enabledLabTestIds`, and `customDefinitions`.
+- V360-BACKUP-05: Each custom definition preserves its id, display name, and optional default unit, including `defaultUnit == null`.
+- V360-BACKUP-06: Predefined lab-test definitions are not duplicated into the backup payload.
+- V360-BACKUP-07: A valid v6 backup requires `labTestSettings`; a missing or non-object value is rejected during validation.
+- V360-BACKUP-08: Lab settings validation rejects invalid management types, invalid/duplicate enabled IDs, and invalid custom definitions or relationships.
+- V360-BACKUP-09: Backup versions 1 through 5 remain restorable without a `labTestSettings` object.
+
+### Restore / Rollback
+
+- V360-RESTORE-01: When a backup contains lab settings, restore applies them through `LabTestSettingsService`.
+- V360-RESTORE-02: Restored lab settings are persisted to `SharedPreferences`.
+- V360-RESTORE-03: After restore, lab settings are reloaded so the running app reflects the restored settings without requiring an app restart.
+- V360-RESTORE-04: If restore fails after replacement begins, the previous DB snapshot is restored.
+- V360-RESTORE-05: If previous lab settings were available, restore failure also reapplies the previous lab-settings snapshot.
+- V360-RESTORE-06: Restoring a v1-v5 backup without lab settings must not fail solely because `labTestSettings` is absent.
+
+### Compatibility / Scope
+
+- V360-COMPAT-01: App version is `3.6.0+12`.
+- V360-COMPAT-02: `databaseVersion` remains 8.
+- V360-COMPAT-03: V3.6.0 does not add a DB migration.
+- V360-COMPAT-04: Existing health, medication, symptom, exercise, lab-result, and Statistics data structures remain unchanged.
+- V360-COMPAT-05: V3.6.0 changes backup coverage for lab-test settings; it does not add medical interpretation, diagnosis, risk classification, or medication guidance.
