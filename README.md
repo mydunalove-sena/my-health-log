@@ -1,10 +1,12 @@
-﻿# My Health Log
+# My Health Log
 
 ## 프로젝트 소개
 
 My Health Log는 개인이 자신의 건강 정보를 날짜별로 기록하고 변화 추이를 확인할 수 있도록 만든 Flutter 기반 개인 건강 기록 앱입니다.
 
 이 프로젝트는 개인 건강 기록 앱을 직접 기획하고 Flutter로 구현한 뒤 요구사항 기반 QA, Regression Test, Android Release APK 생성까지 수행한 개인 프로젝트입니다.
+
+현재는 주요 기능 개발과 QA를 마친 뒤 실제 Android 기기에서 개인 실사용 단계로 전환했으며, 실사용에서 확인되는 문제를 근거로 이후 개선 여부를 판단합니다.
 
 ## 프로젝트 목적
 
@@ -13,10 +15,12 @@ My Health Log는 개인이 자신의 건강 정보를 날짜별로 기록하고 
 진행 범위는 다음 흐름으로 정리했습니다.
 
 ```text
-기획 -> 요구사항 정의 -> IA -> User Flow -> Wireframe -> Data Model -> 구현 -> QA -> Regression -> Release
+기획 -> 요구사항 정의 -> IA -> User Flow -> Wireframe -> Data Model -> 구현 -> QA -> Regression -> Release -> 본인 실사용
 ```
 
 QA 관점에서는 요구사항과 실제 구현 결과의 연결, CRUD 동작, 데이터 상태 변화, Local Persistence, DB Migration, Regression, Release Smoke Test를 중점적으로 확인했습니다.
+
+현재는 신규 기능을 미리 확대하기보다 본인 실사용을 지속하고, 이후 신장이식 환자와 투석환자를 우선 대상으로 소규모 사용성 검증을 준비합니다. 이는 의료 효과나 치료 효과 검증이 아니라 실제 기록 편의성, 이해 가능성, 입력 안전성, 누락·불필요 기능, 지속 사용 가능성을 확인하기 위한 단계입니다.
 
 ## 주요 기능
 
@@ -279,6 +283,8 @@ V2 상세 문서는 `docs/v2/`에서 확인할 수 있습니다.
 
 V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 필요한 복약, 증상, 건강기록 설정, 운동 기록을 확장한 버전입니다.
 
+현재 코드 기준 버전은 `3.6.0+12`이며, databaseVersion 8을 유지하고 backupVersion은 6입니다.
+
 ### V3 주요 변경
 
 - 미래 날짜 HealthRecord / LabResult 입력 차단
@@ -316,6 +322,9 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 - PRN 복용 버튼 상태 문구 개선
 - 과거 정기/PRN 복약 기록 추가 및 수정
 - V3.5.1 건강 기록 목록 수분/수면 표시 누락 수정
+- V3.6.0 검사 설정 Backup / Restore 추가
+- backupVersion 6에서 관리 유형, 활성 검사 항목, 사용자 custom 검사 정의 보존
+- v1~v5 기존 백업 복원 호환 유지
 
 ### V3 범위 제한
 
@@ -398,18 +407,36 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 - 저장 로직, HealthRecord model/schema, Home health cards, Statistics, Backup payload는 변경하지 않았습니다.
 - databaseVersion 8, backupVersion 5를 유지하며 DB migration은 없습니다.
 
+### V3.6.0 Lab Settings Backup / Restore Policy
+
+- 검사 설정을 Backup v6의 `data.labTestSettings`에 포함합니다.
+- `labTestSettings`는 관리 유형(`managementType`), 활성 검사 ID(`enabledLabTestIds`), 사용자 정의 검사(`customDefinitions`)를 보존합니다.
+- `customDefinitions`는 사용자 정의 검사의 id, displayName, defaultUnit을 보존하며 `defaultUnit == null`도 round-trip합니다.
+- predefined 검사 정의 전체를 백업 파일에 중복 저장하지 않습니다.
+- V3.6.0부터 `backupVersion`은 6이며 지원 버전은 1~6입니다.
+- Backup v6에서는 `labTestSettings`가 필수이며 누락, 잘못된 형식, 깨진 enabled ID 관계는 validation 단계에서 거부합니다.
+- v1~v5 백업은 `labTestSettings`가 없어도 기존처럼 복원할 수 있습니다.
+- v6 복원 시 `LabTestSettingsService.applyBackup()`으로 SharedPreferences에 실제 반영하고, 복원 완료 직후 `load()`하여 앱을 재시작하지 않아도 실행 중 상태에 반영합니다.
+- restore 실패 시 기존 DB snapshot과 기존 검사 설정 snapshot의 rollback을 시도합니다.
+- 건강, 복약, 증상, 운동, 통계 기능 동작은 변경하지 않았습니다.
+- databaseVersion 8을 유지하며 DB migration은 없습니다.
+
 ### V3 최종 검증 상태
 
 | Item | Result |
 | --- | --- |
+| Current app version | `3.6.0+12` |
 | `flutter analyze` | PASS: No issues found |
-| `flutter test` | PASS: 281/281 |
-| Focused V3.5.1 health display tests | PASS: 17/17 |
-| Android V3.5.1 update/install QA | PASS: confirmed app functional failures 0 |
-| Release APK build | PASS |
-| Release APK | `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.5.1.apk` |
+| V3.6 related regression | PASS: 65/65 |
+| Full `flutter test` | PASS: 285/285 |
+| `git diff --check` | PASS |
+| V3.6 Git commit / push | PASS: `efbfc06c1faabcc2bad39880190213f8f13c998d` on `v3` |
+| Latest confirmed Android device release QA | V3.5.1 PASS: confirmed app functional failures 0 |
+| V3.6.0 GitHub public Release | Not created |
 | databaseVersion | 8 |
-| backupVersion | 5 |
+| backupVersion | 6 |
+
+V3.6.0의 자동 검증과 Git 반영은 확인되었습니다. 별도의 V3.6.0 Release APK 빌드 및 실제 Android 기기 QA를 완료했다는 최종 증거는 현재 문서에서 확인되지 않으므로 완료로 기재하지 않습니다.
 
 V3 상세 요구사항, 테스트 케이스, 변경 이력은 `docs/v3/`에서 확인할 수 있습니다.
 
@@ -437,14 +464,24 @@ V3 상세 요구사항, 테스트 케이스, 변경 이력은 `docs/v3/`에서 �
 
 ## Release
 
-- Current App Version: `3.5.1+11`
-- Current Code State: V3.5.1 local release build candidate from branch `v3`
-- Current Release Type: Local V3.5.1 Release APK build and Android User 0 update-install verification
-- Current Release APK: `build\app\outputs\flutter-apk\app-release.apk`
-- Current Release APK Size: `54,607,645 bytes`
-- Current external APK copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.5.1.apk`
+- Current App Version: `3.6.0+12`
+- Current Code State: V3.6.0 code committed and pushed on branch `v3`
+- Current V3 HEAD: `efbfc06c1faabcc2bad39880190213f8f13c998d`
+- Current Project Stage: personal real use, project documentation, and small-scale usability validation preparation
+- Latest confirmed local Release APK / Android update-install QA: V3.5.1
+- Confirmed V3.5.1 external APK copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.5.1.apk`
+- Confirmed V3.5.1 APK size: `54,607,645 bytes`
+- V3.6.0 public GitHub tag / Release: not created
 
-Latest public GitHub release remains V2:
+Latest public GitHub release:
+
+- Version: `3.1.1+6`
+- Tag: `v3.1.1`
+- Release Name: `My Health Log V3.1.1`
+- Release Asset: `My-Health-Log-v3.1.1.apk`
+- Release Type: Public V3.1.1 version-metadata hot fix
+
+V2 public release remains available as release history:
 
 - V2 Version: `2.0.0+3`
 - V2 Release Type: Public V2 Release
@@ -461,6 +498,25 @@ V1 baseline artifact remains available:
 
 APK binary files are not tracked in the source repository. Public APK downloads are provided as GitHub Release assets.
 
+## 현재 단계
+
+My Health Log는 판매나 수익화를 목적으로 시작한 앱이 아니라 개인 건강기록과 QA 포트폴리오를 목적으로 만든 프로젝트입니다.
+
+현재는 새로운 기능을 계속 추가하기보다 현재 버전을 실제로 사용하면서 확인되는 문제를 개선 후보로 기록합니다.
+
+향후 1차 사용자 사용성 검증 대상은 신장이식 환자와 투석환자로 한정합니다. 간이식, 폐이식, 췌장이식 등 다른 환자군을 고려한 검사 구조는 유지하지만 해당 사용자군에 대한 실제 사용자 검증은 아직 완료되지 않았습니다.
+
+사용자 검증에서 확인하려는 것은 다음과 같은 사용성입니다.
+
+- 별도 설명 없이 주요 기능을 이해하고 사용할 수 있는가
+- 실제 필요한 건강·검사·복약·PRN·증상·운동 기록을 남길 수 있는가
+- 반복 입력이 지나치게 번거롭지 않은가
+- 잘못 이해하거나 잘못 입력할 가능성이 있는가
+- 필요한데 없는 기능과 사용하지 않는 기능은 무엇인가
+- 일정 기간 후에도 계속 사용할 의향이 있는가
+
+이는 앱 사용이 건강을 개선하는지, 특정 수치 관리나 치료에 효과가 있는지 검증하는 의료 효과 평가가 아닙니다.
+
 ## 개인정보 및 의료 기능 범위
 
 My Health Log는 사용자가 직접 입력한 건강 정보를 Local SQLite DB에 기록하는 개인 기록 앱입니다.
@@ -474,5 +530,5 @@ My Health Log는 사용자가 직접 입력한 건강 정보를 Local SQLite DB�
 - 약물 효과 분석
 - 복용량 추천
 - 검사 수치 의료 해석
+- 의료 효과 또는 치료 효과 검증
 - 사용자 대상 공개 운영
-
