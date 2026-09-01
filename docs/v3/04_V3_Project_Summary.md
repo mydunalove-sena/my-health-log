@@ -18,7 +18,7 @@ Confirmed current data versions:
 - databaseVersion: 8
 - backupVersion: 6
 
-The main feature-development and QA cycle has been completed through the confirmed V3.6.0 automated-verification scope.
+The main feature-development and QA cycle has been completed through the confirmed V3.6.0 release and real-device verification scope.
 
 The project is now moving from continuous feature expansion toward:
 
@@ -26,7 +26,7 @@ The project is now moving from continuous feature expansion toward:
 - evidence-based issue collection
 - usability-validation preparation for a small number of kidney-transplant and dialysis users
 
-V3.6.0 itself has confirmed automated QA and Git evidence. A separate V3.6.0 Release APK build and separate V3.6.0 Android device QA are not confirmed by the available final evidence and must not be described as completed without new evidence.
+V3.6.0 itself has confirmed automated QA, release APK build evidence, Git evidence, Android User 0 update-install smoke QA, and real-device Backup v6 lab-settings restore evidence.
 
 ## 3. Product Direction
 
@@ -303,8 +303,9 @@ Confirmed evidence:
 
 Evidence boundary:
 
-- separate V3.6.0 Release APK build: not confirmed by the available final evidence
-- separate V3.6.0 Android device QA: not confirmed by the available final evidence
+- V3.6.0 Release APK build: PASS, 54,607,645 bytes, SHA-256 `FB22E909A47627EBDA31D5BAC2931F6A04A637A9D3C103543FA022428499562A`
+- V3.6.0 Android device QA: PASS, Samsung SM-S918N, Android 16, SDK 36, User 0 update install, User 95 package absent
+- V3.6.0 real-device Backup v6 lab-settings restore QA: PASS
 
 ## 7. QA Characteristics Demonstrated by the Project
 

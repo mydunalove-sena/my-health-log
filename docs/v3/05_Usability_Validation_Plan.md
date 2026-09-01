@@ -38,9 +38,9 @@ Current documented baseline:
 - backupVersion: 6
 - branch: `v3`
 
-Confirmed V3.6 evidence includes automated regression and lab-settings backup/restore verification.
+Confirmed V3.6 evidence includes automated regression, release APK build verification, Android User 0 update-install smoke QA, and real-device lab-settings backup/restore verification.
 
-A separate V3.6.0 Release APK build and separate V3.6.0 Android device QA are not confirmed by the available final evidence. Before external APK distribution, the actual distribution build and installation path must therefore be confirmed separately.
+The current V3.6.0 distributable baseline is `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.6.0.apk`, 54,607,645 bytes, SHA-256 `FB22E909A47627EBDA31D5BAC2931F6A04A637A9D3C103543FA022428499562A`. It was update-installed on Samsung SM-S918N Android 16 SDK 36 using User 0 only; User 95 package presence was checked and absent.
 
 ## 4. Validation Type
 

@@ -431,12 +431,13 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 | Full `flutter test` | PASS: 285/285 |
 | `git diff --check` | PASS |
 | V3.6 Git commit / push | PASS: `efbfc06c1faabcc2bad39880190213f8f13c998d` on `v3` |
-| Latest confirmed Android device release QA | V3.5.1 PASS: confirmed app functional failures 0 |
+| V3.6.0 Release APK build | PASS: `build/app/outputs/flutter-apk/app-release.apk`, 54,607,645 bytes, SHA-256 `FB22E909A47627EBDA31D5BAC2931F6A04A637A9D3C103543FA022428499562A` |
+| V3.6.0 Android device release QA | PASS: Samsung SM-S918N, Android 16, SDK 36, User 0 update install, User 95 package absent, confirmed app functional failures 0 |
 | V3.6.0 GitHub public Release | Not created |
 | databaseVersion | 8 |
 | backupVersion | 6 |
 
-V3.6.0의 자동 검증과 Git 반영은 확인되었습니다. 별도의 V3.6.0 Release APK 빌드 및 실제 Android 기기 QA를 완료했다는 최종 증거는 현재 문서에서 확인되지 않으므로 완료로 기재하지 않습니다.
+V3.6.0의 자동 검증, Release APK 빌드, 실제 Android 기기 User 0 update-install smoke QA, Backup v6 lab-settings restore QA, QA artifact archive 정리가 최종 확인되었습니다.
 
 V3 상세 요구사항, 테스트 케이스, 변경 이력은 `docs/v3/`에서 확인할 수 있습니다.
 

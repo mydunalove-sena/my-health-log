@@ -1125,14 +1125,23 @@ This change is configuration preservation only. It does not add medical interpre
 - Restore reload behavior: PASS.
 - Restore rollback behavior: PASS.
 
-### Release / Device Evidence Boundary
+### Release / Device QA
 
 - V3.6.0 feature code was committed to branch `v3`.
 - Feature commit: `efbfc06c1faabcc2bad39880190213f8f13c998d` (`fix: include lab settings in backup v6`).
-- Separate V3.6.0 Release APK build is not confirmed by the available final evidence.
-- Separate V3.6.0 Android device QA is not confirmed by the available final evidence.
-- Do not report V3.6.0 Release APK or Android device QA as PASS unless new evidence is produced.
+- Release APK build: PASS.
+- APK: `build/app/outputs/flutter-apk/app-release.apk`, 54,607,645 bytes.
+- APK SHA-256: `FB22E909A47627EBDA31D5BAC2931F6A04A637A9D3C103543FA022428499562A`.
+- External copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.6.0.apk`, same size and SHA-256.
+- Device: Samsung SM-S918N, Android 16, SDK 36.
+- Install: PASS, `adb install --user 0 -r`, versionName 3.6.0, versionCode 12.
+- User 95 / DUAL_APP package check: PASS, package absent.
+- Launch smoke: PASS, 3/3 launches.
+- Main screens: PASS, Home, Health, Medication, Lab, and Statistics accessible.
+- Existing data presence: PASS, health, medication, and lab-result data remained present; sensitive values were not copied into documentation.
+- Real-device Backup v6 lab-settings restore: PASS, baseline V6 backup included `labTestSettings`, a settings-only BUN toggle was restored from backup, persistence remained after force-stop/relaunch, and existing data presence remained.
+- logcat: PASS, no app PID fatal exception, ANR, AndroidRuntime, E/flutter, or crash lines found.
 
 ### Result
 
-V3.6.0 completed the lab-test-settings backup/restore gap with backupVersion 6 and passed the confirmed automated regression and static checks. The database schema remained at version 8, older backup versions remained supported, and no medical interpretation behavior was added.
+V3.6.0 completed the lab-test-settings backup/restore gap with backupVersion 6 and passed automated regression, static checks, release APK build verification, Android User 0 update-install smoke QA, real-device lab-settings Backup/Restore QA, and launch stability checks. The database schema remained at version 8, older backup versions remained supported, and no medical interpretation behavior was added.

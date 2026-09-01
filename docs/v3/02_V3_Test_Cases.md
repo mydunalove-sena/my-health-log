@@ -630,9 +630,12 @@ This check is recorded separately from the strengthened device QA count above. T
 - V6 lab settings payload / restore / reload / rollback / validation coverage: PASS.
 - `databaseVersion`: 8 unchanged.
 - `backupVersion`: 6.
-- Separate V3.6.0 Release APK build: not confirmed by the available final evidence.
-- Separate V3.6.0 Android device QA: not confirmed by the available final evidence.
-- Do not report V3.6 Release/device QA as PASS without new evidence.
+- V3.6.0 Release APK build: PASS; `build/app/outputs/flutter-apk/app-release.apk`, 54,607,645 bytes, SHA-256 `FB22E909A47627EBDA31D5BAC2931F6A04A637A9D3C103543FA022428499562A`.
+- External APK copy: PASS; `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.6.0.apk`, same size and SHA-256.
+- Android device QA: PASS; Samsung SM-S918N, Android 16, SDK 36.
+- Android install scope: PASS; `adb install --user 0 -r`, versionName 3.6.0, versionCode 12, User 95 package absent.
+- Device smoke: PASS; launch 3/3, Home, Health, Medication, Lab, and Statistics accessible, existing data presence preserved.
+- Real-device Backup v6 lab-settings QA: PASS; `labTestSettings` payload present, settings change/restore/persistence confirmed, no fatal app crash or ANR found in app PID logcat.
 
 ## Regression
 
