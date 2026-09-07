@@ -125,15 +125,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
         (_hasInjectedServices
             ? LabTestSettingsService.inMemory()
             : LabTestSettingsService());
-    _loadFuture = Future.wait<void>([
-      _healthService.load(),
-      _medicationService.load(),
-      _labResultService.load(),
-      _symptomService.load(),
-      _exerciseService.load(),
-      _fieldVisibilityService.load(),
-      _labTestSettingsService.load(),
-    ]);
+    _loadFuture = _load();
   }
 
   bool get _hasInjectedServices {
@@ -143,6 +135,34 @@ class _AppBootstrapState extends State<_AppBootstrap> {
         widget.symptomService != null ||
         widget.exerciseService != null ||
         widget.labTestSettingsService != null;
+  }
+
+  Future<void> _load() async {
+    await Future.wait<void>([
+      _healthService.load(),
+      _medicationService.load(),
+      _labResultService.load(),
+      _symptomService.load(),
+      _exerciseService.load(),
+      _fieldVisibilityService.load(),
+      _labTestSettingsService.load(),
+    ]);
+    if (_hasInjectedServices) return;
+
+    final result = await _symptomService.cleanupTestSymptomDefinition(
+      name: 'AutoSymptomRenamed',
+      prnSymptomDefinitionIds:
+          (await _medicationService.allPrnSymptomLinksForTest()).map(
+            (link) => link.symptomDefinitionId,
+          ),
+    );
+    debugPrint(
+      'MHL_AUTOSYMPTOM_CLEANUP '
+      'found=${result.wasFound} '
+      'action=${result.action.name} '
+      'symptom_records=${result.symptomRecordReferences} '
+      'prn_symptom_links=${result.prnSymptomLinkReferences}',
+    );
   }
 
   @override

@@ -29,7 +29,28 @@ abstract class SymptomStorage {
   Future<List<SymptomRecord>> fetchRecords();
   Future<void> insertDefinition(SymptomDefinition definition);
   Future<void> updateDefinition(SymptomDefinition definition);
+  Future<void> deleteDefinition(String id);
   Future<void> upsertRecord(SymptomRecord record);
+}
+
+enum TestSymptomCleanupAction { notFound, deleted, deactivated }
+
+class TestSymptomCleanupResult {
+  const TestSymptomCleanupResult({
+    required this.name,
+    required this.action,
+    required this.symptomRecordReferences,
+    required this.prnSymptomLinkReferences,
+  });
+
+  final String name;
+  final TestSymptomCleanupAction action;
+  final int symptomRecordReferences;
+  final int prnSymptomLinkReferences;
+
+  bool get wasFound => action != TestSymptomCleanupAction.notFound;
+  bool get hasReferences =>
+      symptomRecordReferences > 0 || prnSymptomLinkReferences > 0;
 }
 
 class SymptomService extends ChangeNotifier {
@@ -130,7 +151,10 @@ class SymptomService extends ChangeNotifier {
     await saveRecord(record);
   }
 
-  Future<SymptomDefinition> addUserDefinition(String name, {DateTime? now}) async {
+  Future<SymptomDefinition> addUserDefinition(
+    String name, {
+    DateTime? now,
+  }) async {
     final normalizedName = _validateDefinitionName(name);
     final timestamp = now ?? DateTime.now();
     final maxSortOrder = _definitions.isEmpty
@@ -177,6 +201,75 @@ class SymptomService extends ChangeNotifier {
     _sortDefinitions();
     notifyListeners();
     return updated;
+  }
+
+  Future<TestSymptomCleanupResult> cleanupTestSymptomDefinition({
+    required String name,
+    required Iterable<String> prnSymptomDefinitionIds,
+    DateTime? now,
+  }) async {
+    final matches = _definitions
+        .where((definition) => definition.name == name && !definition.isDefault)
+        .toList(growable: false);
+    if (matches.isEmpty) {
+      return TestSymptomCleanupResult(
+        name: name,
+        action: TestSymptomCleanupAction.notFound,
+        symptomRecordReferences: 0,
+        prnSymptomLinkReferences: 0,
+      );
+    }
+
+    var symptomRecordReferences = 0;
+    var prnSymptomLinkReferences = 0;
+    for (final definition in matches) {
+      symptomRecordReferences += _records
+          .where((record) => record.symptomDefinitionId == definition.id)
+          .length;
+      prnSymptomLinkReferences += prnSymptomDefinitionIds
+          .where((id) => id == definition.id)
+          .length;
+    }
+
+    final hasReferences =
+        symptomRecordReferences > 0 || prnSymptomLinkReferences > 0;
+    if (hasReferences) {
+      final timestamp = now ?? DateTime.now();
+      for (final definition in matches) {
+        if (!definition.isActive) continue;
+        final updated = definition.copyWith(
+          isActive: false,
+          updatedAt: timestamp,
+        );
+        await _storage.updateDefinition(updated);
+        final index = _definitions.indexWhere(
+          (item) => item.id == definition.id,
+        );
+        if (index != -1) {
+          _definitions[index] = updated;
+        }
+      }
+      _sortDefinitions();
+      notifyListeners();
+      return TestSymptomCleanupResult(
+        name: name,
+        action: TestSymptomCleanupAction.deactivated,
+        symptomRecordReferences: symptomRecordReferences,
+        prnSymptomLinkReferences: prnSymptomLinkReferences,
+      );
+    }
+
+    for (final definition in matches) {
+      await _storage.deleteDefinition(definition.id);
+      _definitions.removeWhere((item) => item.id == definition.id);
+    }
+    notifyListeners();
+    return TestSymptomCleanupResult(
+      name: name,
+      action: TestSymptomCleanupAction.deleted,
+      symptomRecordReferences: symptomRecordReferences,
+      prnSymptomLinkReferences: prnSymptomLinkReferences,
+    );
   }
 
   String _validateDefinitionName(String name, {String? currentId}) {
@@ -286,6 +379,12 @@ class SqfliteSymptomStorage implements SymptomStorage {
       whereArgs: [definition.id],
     );
   }
+
+  @override
+  Future<void> deleteDefinition(String id) async {
+    final db = await _db;
+    await db.delete(_definitionTable, where: 'id = ?', whereArgs: [id]);
+  }
 }
 
 class InMemorySymptomStorage implements SymptomStorage {
@@ -321,6 +420,11 @@ class InMemorySymptomStorage implements SymptomStorage {
     } else {
       _definitions[index] = definition;
     }
+  }
+
+  @override
+  Future<void> deleteDefinition(String id) async {
+    _definitions.removeWhere((definition) => definition.id == id);
   }
 
   @override

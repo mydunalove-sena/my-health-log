@@ -191,6 +191,8 @@ void main() {
 
       expect(find.byKey(const Key('prn-related-symptoms')), findsOneWidget);
       expect(find.text('관련 증상 (선택)'), findsOneWidget);
+      expect(find.text('상세 증상 (선택)'), findsOneWidget);
+      expect(find.text('메모 (선택)'), findsNothing);
     });
 
     testWidgets('form allows selecting multiple symptoms', (tester) async {

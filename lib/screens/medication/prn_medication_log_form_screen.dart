@@ -97,7 +97,8 @@ class _PrnMedicationLogFormScreenState
               children: [
                 Text(
                   widget.medication.name,
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 if (widget.medication.displayDose != null) ...[
                   const SizedBox(height: AppSpacing.xxs),
@@ -123,7 +124,7 @@ class _PrnMedicationLogFormScreenState
                   onTap: _pickTime,
                 ),
                 const SizedBox(height: AppSpacing.md),
-                Text('실제 복용량', style: Theme.of(context).textTheme.bodyLarge),
+                Text('실제 복용량', style: _fieldLabelStyle(context)),
                 const SizedBox(height: AppSpacing.xs),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -163,7 +164,7 @@ class _PrnMedicationLogFormScreenState
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
-                Text('메모 (선택)', style: Theme.of(context).textTheme.bodyLarge),
+                Text('상세 증상 (선택)', style: _fieldLabelStyle(context)),
                 const SizedBox(height: AppSpacing.xs),
                 TextFormField(
                   key: const Key('prn-note-field'),
@@ -335,7 +336,7 @@ class _ActionField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodyLarge),
+        Text(label, style: _fieldLabelStyle(context)),
         const SizedBox(height: AppSpacing.xs),
         InkWell(
           onTap: onTap,
@@ -375,7 +376,7 @@ class _RelatedSymptomsField extends StatelessWidget {
       key: const Key('prn-related-symptoms'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('관련 증상 (선택)', style: Theme.of(context).textTheme.bodyLarge),
+        Text('관련 증상 (선택)', style: _fieldLabelStyle(context)),
         const SizedBox(height: AppSpacing.xs),
         Material(
           color: AppColors.surface,
@@ -392,7 +393,10 @@ class _RelatedSymptomsField extends StatelessWidget {
                   value: selectedIds.contains(definitions[i].id),
                   onChanged: (value) =>
                       onChanged(definitions[i].id, value ?? false),
-                  title: Text(definitions[i].name),
+                  title: Text(
+                    definitions[i].name,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.sm,
@@ -434,4 +438,9 @@ InputDecoration _inputDecoration() {
       borderSide: const BorderSide(color: AppColors.error),
     ),
   );
+}
+
+TextStyle? _fieldLabelStyle(BuildContext context) {
+  return Theme.of(context).textTheme.bodyLarge
+      ?.copyWith(color: AppColors.mainText, fontWeight: FontWeight.w600);
 }

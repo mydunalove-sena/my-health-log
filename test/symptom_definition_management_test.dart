@@ -56,10 +56,7 @@ void main() {
       final service = await _symptomService();
       final createdAt = DateTime(2026, 8, 27, 9);
       final updatedAt = DateTime(2026, 8, 27, 10);
-      final original = await service.addUserDefinition(
-        '목통증',
-        now: createdAt,
-      );
+      final original = await service.addUserDefinition('목통증', now: createdAt);
 
       final renamed = await service.renameUserDefinition(
         original.id,
@@ -90,10 +87,7 @@ void main() {
       final service = await _symptomService();
       final definition = await service.addUserDefinition('목통증');
 
-      final same = await service.renameUserDefinition(
-        definition.id,
-        '목통증',
-      );
+      final same = await service.renameUserDefinition(definition.id, '목통증');
       expect(same.name, '목통증');
 
       expect(
@@ -166,7 +160,9 @@ void main() {
         findsOneWidget,
       );
 
-      final dropdown = find.byKey(ValueKey('symptom-severity-${definition.id}'));
+      final dropdown = find.byKey(
+        ValueKey('symptom-severity-${definition.id}'),
+      );
       await tester.ensureVisible(dropdown);
       await tester.pumpAndSettle();
       await tester.tap(dropdown);
@@ -294,6 +290,89 @@ void main() {
       expect(reloaded.definitionById(definition.id)?.name, '목 통증');
       expect(reloaded.definitionById(definition.id)?.isDefault, isFalse);
     });
+
+    test('cleanup deletes only unreferenced AutoSymptomRenamed', () async {
+      final storage = InMemorySymptomStorage(
+        definitions: [
+          ..._definitions(),
+          _userDefinition(id: 'test-auto', name: 'AutoSymptomRenamed'),
+          _userDefinition(id: 'real-user', name: '근육통'),
+        ],
+      );
+      final service = SymptomService(storage);
+      await service.load();
+
+      final result = await service.cleanupTestSymptomDefinition(
+        name: 'AutoSymptomRenamed',
+        prnSymptomDefinitionIds: const [],
+      );
+
+      expect(result.action, TestSymptomCleanupAction.deleted);
+      expect(result.symptomRecordReferences, 0);
+      expect(result.prnSymptomLinkReferences, 0);
+      expect(service.definitionById('test-auto'), isNull);
+      expect(service.definitionById('real-user')?.name, '근육통');
+      expect(
+        service.definitions.map((definition) => definition.name),
+        isNot(contains('AutoSymptomRenamed')),
+      );
+    });
+
+    test(
+      'cleanup deactivates referenced AutoSymptomRenamed and preserves records',
+      () async {
+        final auto = _userDefinition(
+          id: 'test-auto',
+          name: 'AutoSymptomRenamed',
+        );
+        final storage = InMemorySymptomStorage(
+          definitions: [
+            ..._definitions(),
+            auto,
+            _userDefinition(id: 'real-user', name: '근육통'),
+          ],
+          records: [
+            SymptomRecord(
+              id: 'record-auto',
+              symptomDefinitionId: auto.id,
+              date: DateTime(2026, 8, 28),
+              severity: SymptomSeverity.mild,
+              createdAt: DateTime(2026, 8, 28, 8),
+              updatedAt: DateTime(2026, 8, 28, 8),
+            ),
+          ],
+        );
+        final service = SymptomService(storage);
+        await service.load();
+
+        final result = await service.cleanupTestSymptomDefinition(
+          name: 'AutoSymptomRenamed',
+          prnSymptomDefinitionIds: const ['test-auto'],
+          now: DateTime(2026, 8, 28, 9),
+        );
+
+        expect(result.action, TestSymptomCleanupAction.deactivated);
+        expect(result.symptomRecordReferences, 1);
+        expect(result.prnSymptomLinkReferences, 1);
+        expect(service.definitionById(auto.id)?.isActive, isFalse);
+        expect(
+          service
+              .recordsForDate(DateTime(2026, 8, 28))
+              .single
+              .symptomDefinitionId,
+          auto.id,
+        );
+        expect(service.definitionById('real-user')?.isActive, isTrue);
+        expect(
+          service.definitions.map((definition) => definition.name),
+          isNot(contains('AutoSymptomRenamed')),
+        );
+        expect(
+          service.definitions.map((definition) => definition.name),
+          contains('근육통'),
+        );
+      },
+    );
   });
 }
 
@@ -351,6 +430,19 @@ Medication _prnMedication() {
     evening: false,
     bedtime: false,
     isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  );
+}
+
+SymptomDefinition _userDefinition({required String id, required String name}) {
+  final now = DateTime(2026, 8, 27);
+  return SymptomDefinition(
+    id: id,
+    name: name,
+    isDefault: false,
+    isActive: true,
+    sortOrder: 30,
     createdAt: now,
     updatedAt: now,
   );

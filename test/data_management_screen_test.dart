@@ -242,6 +242,11 @@ class _MutableSymptomStorage implements SymptomStorage {
   }
 
   @override
+  Future<void> deleteDefinition(String id) async {
+    _definitions.removeWhere((definition) => definition.id == id);
+  }
+
+  @override
   Future<void> upsertRecord(SymptomRecord record) async {
     final index = _records.indexWhere(
       (item) =>

@@ -552,6 +552,19 @@ class _PrnHistoryRow extends StatelessWidget {
                   ?.copyWith(color: AppColors.secondaryText),
             ),
           ],
+          if (_noteText(entry.log) != null) ...[
+            const SizedBox(height: AppSpacing.xxs),
+            Text(
+              '상세 증상: ${_noteText(entry.log)!}',
+              key: ValueKey('med-history-prn-note-${entry.log.id}'),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.secondaryText,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
           if (onEdit != null) ...[
             const SizedBox(height: AppSpacing.xs),
             Align(
@@ -986,43 +999,76 @@ class _PrnMedicationGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('필요 시 복용약', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.sm),
-        Container(
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            children: [
-              for (var i = 0; i < medications.length; i++) ...[
-                _PrnMedicationRow(
-                  medication: medications[i],
-                  logs: service.prnLogsForMedication(medications[i].id),
-                  symptomDefinitions: symptomDefinitions,
-                  symptomDefinitionIdsForLog:
-                      service.symptomDefinitionIdsForPrnLog,
-                  onRecord: () => onRecord(medications[i]),
-                ),
-                if (i != medications.length - 1)
-                  const Divider(height: 1, color: AppColors.border),
-              ],
-            ],
-          ),
-        ),
-      ],
+    return FutureBuilder<_PrnMedicationGroupData>(
+      future: _loadData(),
+      builder: (context, snapshot) {
+        final data = snapshot.data ?? const _PrnMedicationGroupData();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('필요 시 복용약', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.card),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                children: [
+                  for (var i = 0; i < medications.length; i++) ...[
+                    if (service.prnLogsForMedication(medications[i].id)
+                        case final logs)
+                      _PrnMedicationRow(
+                        medication: medications[i],
+                        logs: logs,
+                        summary:
+                            data.summaries[medications[i].id] ??
+                            const PrnMedicationPeriodSummary(),
+                        recentLogs: data.recentLogs[medications[i].id] ?? logs,
+                        symptomDefinitions: symptomDefinitions,
+                        symptomDefinitionIdsForLog:
+                            service.symptomDefinitionIdsForPrnLog,
+                        onRecord: () => onRecord(medications[i]),
+                      ),
+                    if (i != medications.length - 1)
+                      const Divider(height: 1, color: AppColors.border),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
+
+  Future<_PrnMedicationGroupData> _loadData() async {
+    final summaries = await service.prnPeriodSummaryByMedication();
+    final recentLogs = await service.recentPrnLogsByMedication();
+    return _PrnMedicationGroupData(
+      summaries: summaries,
+      recentLogs: recentLogs,
+    );
+  }
+}
+
+class _PrnMedicationGroupData {
+  const _PrnMedicationGroupData({
+    this.summaries = const {},
+    this.recentLogs = const {},
+  });
+
+  final Map<String, PrnMedicationPeriodSummary> summaries;
+  final Map<String, List<PrnMedicationLog>> recentLogs;
 }
 
 class _PrnMedicationRow extends StatelessWidget {
   const _PrnMedicationRow({
     required this.medication,
     required this.logs,
+    this.summary,
+    required this.recentLogs,
     required this.symptomDefinitions,
     required this.symptomDefinitionIdsForLog,
     required this.onRecord,
@@ -1030,6 +1076,8 @@ class _PrnMedicationRow extends StatelessWidget {
 
   final Medication medication;
   final List<PrnMedicationLog> logs;
+  final PrnMedicationPeriodSummary? summary;
+  final List<PrnMedicationLog> recentLogs;
   final List<SymptomDefinition> symptomDefinitions;
   final List<String> Function(String prnMedicationLogId)
   symptomDefinitionIdsForLog;
@@ -1039,6 +1087,7 @@ class _PrnMedicationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final latest = logs.isEmpty ? null : logs.first;
     return Padding(
+      key: ValueKey('prn-medication-row-${medication.id}'),
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Row(
         children: [
@@ -1066,13 +1115,17 @@ class _PrnMedicationRow extends StatelessWidget {
                         ?.copyWith(color: AppColors.secondaryText),
                   ),
                 ],
-                if (logs.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.xxs),
-                  for (final log in logs)
-                    _PrnLogDetailItem(
-                      log: log,
-                      symptomNames: _symptomNamesForLog(log.id),
-                    ),
+                if (summary != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _PrnPeriodSummaryView(summary: summary!),
+                ],
+                if (recentLogs.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _PrnRecentHistoryPreview(
+                    medication: medication,
+                    logs: recentLogs,
+                    symptomNamesForLog: _symptomNamesForLog,
+                  ),
                 ],
               ],
             ),
@@ -1096,6 +1149,38 @@ class _PrnMedicationRow extends StatelessWidget {
   }
 }
 
+class _PrnRecentHistoryPreview extends StatelessWidget {
+  const _PrnRecentHistoryPreview({
+    required this.medication,
+    required this.logs,
+    required this.symptomNamesForLog,
+  });
+
+  final Medication medication;
+  final List<PrnMedicationLog> logs;
+  final List<String> Function(String prnMedicationLogId) symptomNamesForLog;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: ValueKey('prn-recent-history-${medication.id}'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '최근 복용 기록',
+          key: ValueKey('prn-recent-history-title-${medication.id}'),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppColors.mainText,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        for (final log in logs)
+          _PrnLogDetailItem(log: log, symptomNames: symptomNamesForLog(log.id)),
+      ],
+    );
+  }
+}
+
 class _PrnLogDetailItem extends StatelessWidget {
   const _PrnLogDetailItem({required this.log, required this.symptomNames});
 
@@ -1104,22 +1189,27 @@ class _PrnLogDetailItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Padding(
       key: ValueKey('prn-log-entry-${log.id}'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.xxs),
-          child: Text(
-            _formatTime(log.takenAt),
+      padding: const EdgeInsets.only(top: AppSpacing.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${_formatShortDate(log.date)} ${_formatTime(log.takenAt)}'
+            '${log.displayDose == null ? '' : ' | ${log.displayDose}'}',
             key: ValueKey('prn-log-time-${log.id}'),
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: AppColors.secondaryText),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.mainText,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
-        if (symptomNames.isNotEmpty)
-          _PrnLogDetailLine(log: log, symptomNames: symptomNames),
-      ],
+          if (symptomNames.isNotEmpty)
+            _PrnLogDetailLine(log: log, symptomNames: symptomNames),
+          if (_noteText(log) != null)
+            _PrnLogNoteLine(logId: log.id, note: _noteText(log)!),
+        ],
+      ),
     );
   }
 }
@@ -1137,8 +1227,83 @@ class _PrnLogDetailLine extends StatelessWidget {
       child: Text(
         '관련 증상: ${symptomNames.join(' · ')}',
         key: ValueKey('prn-log-detail-${log.id}'),
-        style: Theme.of(context).textTheme.bodySmall
-            ?.copyWith(color: AppColors.secondaryText),
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: AppColors.secondaryText,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+class _PrnPeriodSummaryView extends StatelessWidget {
+  const _PrnPeriodSummaryView({required this.summary});
+
+  final PrnMedicationPeriodSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodyMedium
+        ?.copyWith(color: AppColors.secondaryText, fontWeight: FontWeight.w500);
+    return Column(
+      key: const Key('prn-period-summary'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _PrnSummaryLine(
+          label: '지난 30일',
+          count: summary.last30Days,
+          suffix: '회',
+          style: style,
+        ),
+        _PrnSummaryLine(
+          label: '복용일',
+          count: summary.medicationDays,
+          suffix: '일',
+          style: style,
+        ),
+      ],
+    );
+  }
+}
+
+class _PrnSummaryLine extends StatelessWidget {
+  const _PrnSummaryLine({
+    required this.label,
+    required this.count,
+    required this.suffix,
+    required this.style,
+  });
+
+  final String label;
+  final int count;
+  final String suffix;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text('$label $count$suffix', style: style);
+  }
+}
+
+class _PrnLogNoteLine extends StatelessWidget {
+  const _PrnLogNoteLine({required this.logId, required this.note});
+
+  final String logId;
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xxs),
+      child: Text(
+        '상세 증상: $note',
+        key: ValueKey('prn-log-note-$logId'),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: AppColors.secondaryText,
+          fontWeight: FontWeight.w500,
+        ),
       ),
     );
   }
@@ -1215,4 +1380,11 @@ String _formatTime(DateTime date) {
   final hour = date.hour.toString().padLeft(2, '0');
   final minute = date.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
+}
+
+String _formatShortDate(DateTime date) => '${date.month}/${date.day}';
+
+String? _noteText(PrnMedicationLog log) {
+  final note = log.note?.trim();
+  return note == null || note.isEmpty ? null : note;
 }

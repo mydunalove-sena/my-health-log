@@ -151,6 +151,69 @@ class MedicationService extends ChangeNotifier {
     return _storage.fetchDoseHistory(medicationId);
   }
 
+  Future<Map<String, PrnMedicationPeriodSummary>> prnPeriodSummaryByMedication({
+    DateTime? asOf,
+  }) async {
+    final currentDate = _normalize(asOf ?? DateTime.now());
+    final recent30Start = currentDate.subtract(const Duration(days: 29));
+    final currentKey = MedicationLog.formatDateKey(currentDate);
+    final recent30StartKey = MedicationLog.formatDateKey(recent30Start);
+    final counts = <String, int>{};
+    final dateKeysByMedication = <String, Set<String>>{};
+
+    for (final log in await _storage.fetchAllPrnLogs()) {
+      final key = log.dateKey;
+      if (key.compareTo(recent30StartKey) < 0 ||
+          key.compareTo(currentKey) > 0) {
+        continue;
+      }
+      counts[log.medicationId] = (counts[log.medicationId] ?? 0) + 1;
+      dateKeysByMedication.putIfAbsent(log.medicationId, () => {}).add(key);
+    }
+
+    return {
+      for (final entry in counts.entries)
+        entry.key: PrnMedicationPeriodSummary(
+          last30Days: entry.value,
+          medicationDays: dateKeysByMedication[entry.key]!.length,
+          recentDateKeys: (dateKeysByMedication[entry.key]!.toList()
+            ..sort((a, b) => b.compareTo(a))),
+        ),
+    };
+  }
+
+  Future<Map<String, List<PrnMedicationLog>>> recentPrnLogsByMedication({
+    DateTime? asOf,
+    int limitPerMedication = 5,
+  }) async {
+    final currentDate = _normalize(asOf ?? DateTime.now());
+    final recent30Start = currentDate.subtract(const Duration(days: 29));
+    final currentKey = MedicationLog.formatDateKey(currentDate);
+    final recent30StartKey = MedicationLog.formatDateKey(recent30Start);
+    final logsByMedication = <String, List<PrnMedicationLog>>{};
+
+    for (final log in await _storage.fetchAllPrnLogs()) {
+      final key = log.dateKey;
+      if (key.compareTo(recent30StartKey) < 0 ||
+          key.compareTo(currentKey) > 0) {
+        continue;
+      }
+      logsByMedication.putIfAbsent(log.medicationId, () => []).add(log);
+    }
+
+    for (final logs in logsByMedication.values) {
+      logs.sort((a, b) => b.takenAt.compareTo(a.takenAt));
+      if (limitPerMedication > 0 && logs.length > limitPerMedication) {
+        logs.removeRange(limitPerMedication, logs.length);
+      }
+    }
+
+    return {
+      for (final entry in logsByMedication.entries)
+        entry.key: List.unmodifiable(entry.value),
+    };
+  }
+
   Future<MedicationHistoryDay> historyForDate(DateTime date) async {
     final currentDate = _normalize(date);
     final medications = await _storage.fetchAllMedications();
@@ -658,6 +721,18 @@ class MedicationHistoryPrnEntry {
 
   String get doseLabel =>
       log.displayDose ?? '\uBCF5\uC6A9\uB7C9 \uAE30\uB85D \uC5C6\uC74C';
+}
+
+class PrnMedicationPeriodSummary {
+  const PrnMedicationPeriodSummary({
+    this.last30Days = 0,
+    this.medicationDays = 0,
+    this.recentDateKeys = const [],
+  });
+
+  final int last30Days;
+  final int medicationDays;
+  final List<String> recentDateKeys;
 }
 
 class SqfliteMedicationStorage implements MedicationStorage {
