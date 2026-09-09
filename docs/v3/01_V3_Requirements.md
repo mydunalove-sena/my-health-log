@@ -512,3 +512,40 @@ Applies to HealthRecord and LabResult.
 - V360-COMPAT-03: V3.6.0 does not add a DB migration.
 - V360-COMPAT-04: Existing health, medication, symptom, exercise, lab-result, and Statistics data structures remain unchanged.
 - V360-COMPAT-05: V3.6.0 changes backup coverage for lab-test settings; it does not add medical interpretation, diagnosis, risk classification, or medication guidance.
+
+## V3.7.0: Smart Capture Lab Input
+
+### Scope
+
+- V370-LAB-CAPTURE-01: Existing direct lab-result input remains available.
+- V370-LAB-CAPTURE-02: A user can start lab-result input from one or more photos or screenshots.
+- V370-LAB-CAPTURE-03: Photo input supports multi-image selection in one capture flow.
+- V370-LAB-CAPTURE-04: OCR uses on-device Korean ML Kit text recognition.
+- V370-LAB-CAPTURE-05: External OCR APIs, Cloud OCR, and remote image/text processing are not used.
+
+### Review / Save Policy
+
+- V370-LAB-REVIEW-01: OCR candidates must not be saved immediately after recognition.
+- V370-LAB-REVIEW-02: OCR candidates must be shown on a Review/Edit screen before saving.
+- V370-LAB-REVIEW-03: The user can edit candidate date/value/mapping before save.
+- V370-LAB-REVIEW-04: Only an explicit save action writes LabResult rows.
+- V370-LAB-REVIEW-05: Opening, canceling, or leaving Review must not write LabResult rows.
+- V370-LAB-REVIEW-06: Source images, source image paths, and raw OCR output are not stored in DB or backup.
+
+### Parsing / Mapping
+
+- V370-LAB-PARSER-01: Severance-style parser separates result values from reference ranges.
+- V370-LAB-PARSER-02: Decimal values recognized by OCR must be preserved for Review.
+- V370-LAB-MAP-01: Mapping uses exact names and explicit aliases only.
+- V370-LAB-MAP-02: Fuzzy matching is not used.
+- V370-LAB-MAP-03: Unmapped tests require user confirmation or mapping.
+- V370-LAB-MAP-04: Total Protein is not automatically created as a lab-test definition.
+- V370-LAB-MAP-05: Explicit alias duplicate protection applies to known aliases including BUN unit variants, Inorganic P(인)/P(인), and HDL-Cholesterol/HDL Cholesterol.
+
+### Compatibility / Excluded Scope
+
+- V370-COMPAT-01: App version is `3.7.0+13`.
+- V370-COMPAT-02: `databaseVersion` remains 8.
+- V370-COMPAT-03: `backupVersion` remains 6.
+- V370-COMPAT-04: `LabResult` schema and backup payload remain unchanged.
+- V370-COMPAT-05: V3.7.0 does not add diagnosis, medical judgment, disease prediction, risk classification, unit conversion, or treatment/medication guidance.

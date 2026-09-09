@@ -1145,3 +1145,59 @@ This change is configuration preservation only. It does not add medical interpre
 ### Result
 
 V3.6.0 completed the lab-test-settings backup/restore gap with backupVersion 6 and passed automated regression, static checks, release APK build verification, Android User 0 update-install smoke QA, real-device lab-settings Backup/Restore QA, and launch stability checks. The database schema remained at version 8, older backup versions remained supported, and no medical interpretation behavior was added.
+
+## 2026-09-09 - V3.7.0 Smart Capture Lab Input
+
+### Requirement
+
+V3.7.0 reduces lab-result entry burden by adding photo/screenshot-based lab input while keeping the existing direct input flow. The feature must use on-device Korean OCR, require Review/Edit before saving, avoid external OCR APIs, avoid raw/source-image persistence, and keep databaseVersion 8 and backupVersion 6.
+
+### Implementation
+
+- Added photo input next to the existing direct lab input path.
+- Added multi-image selection through image picker.
+- Added on-device Korean ML Kit OCR service.
+- Added a Severance-style coordinate/bounding-box parser that separates result values from reference ranges.
+- Added Smart Capture candidate/mapping models and Review/Edit screen.
+- Added explicit alias mapping only; fuzzy matching and automatic custom-definition creation are not used.
+- Kept Total Protein unmapped/user-confirmation required.
+- Added duplicate protection for known alias cases including BUN unit variants, Inorganic P(인)/P(인), and HDL-Cholesterol/HDL Cholesterol.
+- Added release ProGuard/R8 rules required for ML Kit OCR on the real Galaxy release APK path.
+- Kept source images, image paths, and raw OCR output out of DB and backup.
+
+### QA Bugs / Fixes
+
+- Fixed BUN duplicate candidates when OCR produced blank unit and `mg/dL` variants.
+- Fixed Creatinine alias matching when OCR produced a trailing-space alias.
+- Fixed Review edited-value existing-conflict refresh before save.
+- Fixed existing alias duplicate protection so stored alias rows are recognized before insert/update.
+- Fixed release R8 ML Kit OCR NullPointerException on the real Galaxy release path.
+
+### Release Build Fix
+
+- Release APK initially failed the real-device OCR path because ML Kit OCR internals/component registrar classes were not kept sufficiently by R8/ProGuard.
+- Added Android release keep/dontwarn rules for ML Kit OCR internals and component registrars.
+- Final release APK build passed.
+
+### Emulator QA
+
+- Actual Severance emulator QA passed with multi-image selection, on-device OCR, parser, Review/Edit, explicit save, persistence/relaunch, direct-input regression, and logcat checks.
+
+### Real Galaxy QA
+
+- Galaxy SM-S918N User 0 install and verification passed.
+- User 95 did not have the My Health Log package.
+- Existing real-use data was preserved.
+- Smart Capture reached OCR/Review on the real Galaxy after the R8/ProGuard hotfix.
+- Final real-device verification did not save fake lab values to real-use data.
+
+### Automated QA
+
+- Full regression: 328 PASS.
+- `flutter analyze`: PASS.
+- `git diff --check`: PASS.
+- R8 release OCR regression test: PASS.
+
+### Result
+
+V3.7.0 Smart Capture Lab Input passed automated regression, static analysis, diff check, release build verification, emulator QA, and final real Galaxy verification. App version is `3.7.0+13`; databaseVersion remains 8; backupVersion remains 6. The feature records user-confirmed lab results only and does not add diagnosis, disease prediction, risk classification, medical judgment, or external OCR/API behavior.

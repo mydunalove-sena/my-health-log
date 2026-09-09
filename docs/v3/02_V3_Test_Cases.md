@@ -637,6 +637,47 @@ This check is recorded separately from the strengthened device QA count above. T
 - Device smoke: PASS; launch 3/3, Home, Health, Medication, Lab, and Statistics accessible, existing data presence preserved.
 - Real-device Backup v6 lab-settings QA: PASS; `labTestSettings` payload present, settings change/restore/persistence confirmed, no fatal app crash or ANR found in app PID logcat.
 
+## V3.7.0 Smart Capture Lab Input
+
+### Smart Capture / OCR / Review
+
+| ID | Area | Scenario | Expected |
+|---|---|---|---|
+| V370-CAPTURE-TC-01 | Input mode | Open lab-result add action | Direct input and photo input are both available |
+| V370-CAPTURE-TC-02 | Multi-image | Select multiple screenshots/photos | One Review flow is created from the selected images |
+| V370-CAPTURE-TC-03 | OCR | Process selected lab capture images | On-device Korean ML Kit OCR is used; no Cloud OCR/API is used |
+| V370-CAPTURE-TC-04 | Decimal | OCR values include decimals such as `10.8`, `2.1`, or `1.35` | Decimal values are preserved in Review |
+| V370-CAPTURE-TC-05 | Parser | Result and reference range both appear in OCR output | Candidate result uses the result value, not the reference range |
+| V370-CAPTURE-TC-06 | Alias | Known Severance labels are recognized | Explicit alias mapping resolves supported lab tests |
+| V370-CAPTURE-TC-07 | Total Protein | Total Protein appears in OCR output | It remains unmapped/user-confirmation required and is not auto-created |
+| V370-CAPTURE-TC-08 | BUN duplicate | BUN appears with blank and `mg/dL` units | Compatible duplicate candidates collapse to one candidate |
+| V370-CAPTURE-TC-09 | P duplicate | Existing `Inorganic P(인)` and OCR `P(인)` refer to the same test | Existing alias duplicate protection prevents a new duplicate row |
+| V370-CAPTURE-TC-10 | HDL duplicate | Existing `HDL-Cholesterol` and OCR/settings `HDL Cholesterol` refer to the same test | Existing alias duplicate protection prevents a new duplicate row |
+| V370-CAPTURE-TC-11 | Review edit | User edits a candidate value before save | Existing-row comparison refreshes from the edited value |
+| V370-CAPTURE-TC-12 | Pre-save write | Open Review and do not press explicit save | LabResult DB writes remain 0 |
+| V370-CAPTURE-TC-13 | Direct input regression | Use direct lab input after Smart Capture work | Existing direct input remains usable |
+| V370-CAPTURE-TC-14 | Emulator QA | Run actual Severance screenshot flow on emulator | Multi-image picker, OCR, parser, Review, save, relaunch, and logcat checks pass |
+| V370-CAPTURE-TC-15 | Real Galaxy QA | Run real Galaxy Smart Capture flow on SM-S918N | User 0 install/data preservation and OCR/Review reach pass; User 95 package absent |
+| V370-CAPTURE-TC-16 | Release R8 OCR | Build and run release APK OCR path | ML Kit OCR NPE regression is fixed by release ProGuard/R8 rules |
+| V370-CAPTURE-TC-17 | Relaunch | Force-stop/relaunch after install or save checks | Existing data remains visible |
+| V370-CAPTURE-TC-18 | Logcat | Inspect app logs after QA | No app fatal crash, ANR, or raw OCR dump is confirmed |
+| V370-CAPTURE-TC-19 | Existing data | Update-install over real-use data | Existing user data is preserved |
+
+### V3.7.0 Confirmed QA
+
+- Focused Smart Capture/parser/mapping/review/R8 tests: PASS.
+- Full `flutter test`: PASS, 328 tests.
+- `flutter analyze`: PASS.
+- `git diff --check`: PASS; line-ending warnings only.
+- Release APK build: PASS after the R8/ProGuard ML Kit OCR hotfix.
+- Emulator actual Severance QA: PASS.
+- Real Galaxy SM-S918N User 0 install and verification: PASS; User 95 package absent.
+- Existing real-use data preservation: PASS.
+- Smart Capture real Galaxy OCR/Review reach after hotfix: PASS.
+- No fake lab values were saved to real-use data during final real-device verification.
+- databaseVersion remains 8.
+- backupVersion remains 6.
+
 ## Regression
 
 | ID | Area | Scenario | Expected |

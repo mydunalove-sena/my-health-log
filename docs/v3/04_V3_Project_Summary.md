@@ -11,14 +11,14 @@ The project was not started as a commercial product, medical device, or business
 
 ## 2. Current Project Position
 
-The current code baseline is `V3.6.0+12` on branch `v3`.
+The current code baseline is `V3.7.0+13` on branch `v3`.
 
 Confirmed current data versions:
 
 - databaseVersion: 8
 - backupVersion: 6
 
-The main feature-development and QA cycle has been completed through the confirmed V3.6.0 release and real-device verification scope.
+The main feature-development and QA cycle has been completed through the confirmed V3.7.0 release and real-device verification scope.
 
 The project is now moving from continuous feature expansion toward:
 
@@ -26,7 +26,7 @@ The project is now moving from continuous feature expansion toward:
 - evidence-based issue collection
 - usability-validation preparation for a small number of kidney-transplant and dialysis users
 
-V3.6.0 itself has confirmed automated QA, release APK build evidence, Git evidence, Android User 0 update-install smoke QA, and real-device Backup v6 lab-settings restore evidence.
+V3.7.0 has confirmed automated QA, release APK build evidence, Git evidence, Android User 0 update-install verification, real-device data-preservation evidence, and Smart Capture OCR/Review verification on Galaxy SM-S918N.
 
 ## 3. Product Direction
 
@@ -105,6 +105,10 @@ The project therefore separates health-record usability from medical-effect vali
 - existing-value prefill/update
 - numeric-input visibility improvement
 - explicit known-name alias handling for Statistics
+- Smart Capture photo/screenshot input for one or more images
+- on-device Korean OCR for lab capture input
+- Review/Edit before explicit lab-result save
+- explicit Smart Capture alias mapping and duplicate protection
 
 ### Statistics
 
@@ -232,6 +236,21 @@ Lab-test-settings backup gap closure:
 - v1-v5 backup compatibility
 - restore rollback coverage
 
+### V3.7.0
+
+Smart Capture Lab Input:
+
+- direct input remains available
+- photo/screenshot lab input
+- one-image and multi-image selection
+- on-device Korean ML Kit OCR
+- Severance-style parser for result/reference separation
+- Review/Edit before explicit save
+- explicit alias mapping and alias duplicate protection
+- release R8/ProGuard OCR hotfix
+
+The feature reduces repeated lab-result typing. It is not AI diagnosis, disease prediction, automatic risk judgment, or medical interpretation.
+
 ## 6. Confirmed QA Evidence
 
 ### Core V3 baseline
@@ -307,6 +326,23 @@ Evidence boundary:
 - V3.6.0 Android device QA: PASS, Samsung SM-S918N, Android 16, SDK 36, User 0 update install, User 95 package absent
 - V3.6.0 real-device Backup v6 lab-settings restore QA: PASS
 
+### V3.7.0
+
+Confirmed evidence:
+
+- full `flutter test`: 328 PASS
+- `flutter analyze`: PASS
+- `git diff --check`: PASS
+- release APK build: PASS after R8/ProGuard ML Kit OCR hotfix
+- emulator actual Severance Smart Capture QA: PASS
+- Galaxy SM-S918N User 0 install/verification: PASS
+- User 95 package absence: PASS
+- existing real-use data preservation: PASS
+- Smart Capture OCR/Review reach on real Galaxy: PASS
+- no fake lab values saved to real-use data during final verification
+- databaseVersion remains 8
+- backupVersion remains 6
+
 ## 7. QA Characteristics Demonstrated by the Project
 
 ### Requirement Traceability
@@ -350,6 +386,7 @@ Examples include:
 - PRN Home/history usability
 - missing water/sleep summary lines in the Health list
 - lab-test settings not being included in backupVersion 5
+- repeated lab-result typing burden from photo/screenshot-based lab reports
 
 These issues were addressed after actual need or confirmed behavior was identified.
 
@@ -357,10 +394,12 @@ These issues were addressed after actual need or confirmed behavior was identifi
 
 The V3 documentation set is organized as:
 
-- `01_V3_Requirements.md` — V3 requirements through V3.6
-- `02_V3_Test_Cases.md` — test cases and confirmed QA evidence through V3.6
-- `03_V3_Change_History.md` — implementation / QA / version history through V3.6
+- `01_V3_Requirements.md` — V3 requirements through V3.7
+- `02_V3_Test_Cases.md` — test cases and confirmed QA evidence through V3.7
+- `03_V3_Change_History.md` — implementation / QA / version history through V3.7
 - `04_V3_Project_Summary.md` — project-level completion and portfolio summary
+
+The V3 documentation set is current through V3.7.0 Smart Capture Lab Input.
 
 `README.md` provides the repository-level overview and current V3 status.
 

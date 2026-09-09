@@ -27,8 +27,7 @@ void main() {
     final service = await _service();
     await tester.pumpWidget(MaterialApp(home: LabScreen(service: service)));
 
-    await tester.tap(find.byKey(const Key('lab-add-button')));
-    await tester.pumpAndSettle();
+    await _openLabDirectInput(tester);
 
     expect(find.text('\uAC80\uC0AC \uACB0\uACFC \uB4F1\uB85D'), findsWidgets);
     expect(find.byKey(const Key('lab-batch-date-field')), findsOneWidget);
@@ -454,8 +453,7 @@ Future<void> _addLabResult(
   required String value,
   DateTime? date,
 }) async {
-  await tester.tap(find.byKey(const Key('lab-add-button')));
-  await tester.pumpAndSettle();
+  await _openLabDirectInput(tester);
   if (date != null) {
     await _pickVisibleDay(tester, date, dateFieldKey: 'lab-batch-date-field');
   }
@@ -467,6 +465,13 @@ Future<void> _addLabResult(
     await tester.pumpAndSettle();
   }
   await tester.tap(find.byKey(const Key('lab-batch-save-button')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openLabDirectInput(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('lab-add-button')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('lab-direct-input-button')));
   await tester.pumpAndSettle();
 }
 

@@ -5,8 +5,13 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/lab_result.dart';
+import '../../services/lab_capture_mapping_service.dart';
+import '../../services/lab_image_picker_service.dart';
+import '../../services/lab_ocr_service.dart';
 import '../../services/lab_result_service.dart';
 import '../../services/lab_test_settings_service.dart';
+import '../../services/severance_lab_ocr_parser.dart';
+import 'lab_capture_review_screen.dart';
 import 'lab_result_batch_form_screen.dart';
 import 'lab_result_form_screen.dart';
 import 'lab_test_settings_screen.dart';
@@ -16,10 +21,14 @@ class LabScreen extends StatelessWidget {
     super.key,
     required this.service,
     this.labTestSettingsService,
+    this.imagePickerService,
+    this.ocrService,
   });
 
   final LabResultService service;
   final LabTestSettingsService? labTestSettingsService;
+  final LabImagePickerService? imagePickerService;
+  final LabOcrService? ocrService;
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +50,7 @@ class LabScreen extends StatelessWidget {
                 key: const Key('lab-add-button'),
                 tooltip: '\uAC80\uC0AC \uACB0\uACFC \uB4F1\uB85D',
                 icon: const Icon(Icons.add),
-                onPressed: () => _openForm(context),
+                onPressed: () => _openInputChoice(context),
               ),
             ],
           ),
@@ -55,7 +64,7 @@ class LabScreen extends StatelessWidget {
                         message: '\uAC80\uC0AC \uACB0\uACFC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.\n\n\uBCD1\uC6D0 \uAC80\uC0AC \uACB0\uACFC\uB97C \uAE30\uB85D\uD558\uACE0\n\uC774\uC804 \uC218\uCE58\uC640 \uBE44\uAD50\uD574\uBCF4\uC138\uC694.',
                         action: PrimaryButton(
                           label: '+ \uAC80\uC0AC \uACB0\uACFC \uB4F1\uB85D',
-                          onPressed: () => _openForm(context),
+                          onPressed: () => _openInputChoice(context),
                         ),
                       ),
                     ),
@@ -82,6 +91,44 @@ class LabScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _openInputChoice(
+    BuildContext context, {
+    DateTime? initialDate,
+  }) async {
+    final choice = await showModalBottomSheet<_LabInputChoice>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                key: const Key('lab-direct-input-button'),
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('직접 입력'),
+                onTap: () => Navigator.of(context).pop(_LabInputChoice.direct),
+              ),
+              ListTile(
+                key: const Key('lab-photo-input-button'),
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('사진으로 입력'),
+                onTap: () => Navigator.of(context).pop(_LabInputChoice.photo),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!context.mounted || choice == null) return;
+    switch (choice) {
+      case _LabInputChoice.direct:
+        await _openForm(context, initialDate: initialDate);
+      case _LabInputChoice.photo:
+        await _openPhotoCapture(context, initialDate: initialDate);
+    }
   }
 
   Future<void> _openSettings(BuildContext context) async {
@@ -129,6 +176,101 @@ class LabScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _openPhotoCapture(
+    BuildContext context, {
+    DateTime? initialDate,
+  }) async {
+    final settingsService = labTestSettingsService;
+    final fallbackSettingsService = settingsService == null
+        ? LabTestSettingsService.inMemory()
+        : null;
+    if (fallbackSettingsService != null) {
+      await fallbackSettingsService.load();
+    }
+    final activeSettings = settingsService ?? fallbackSettingsService!;
+    final picker = imagePickerService ?? ImagePickerLabImagePickerService();
+    final imagePaths = await picker.pickImages();
+    if (!context.mounted || imagePaths.isEmpty) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    final ocr = ocrService ?? MlKitLabOcrService();
+    try {
+      final documents = await ocr.recognize(imagePaths);
+      final parsed = const SeveranceLabOcrParser().parse(documents);
+      final recognizedDate = _reviewDate(parsed.map((item) => item.date));
+      final candidates = LabCaptureMappingService(activeSettings.allDefinitions)
+          .map(
+            parsed,
+            date: initialDate ?? recognizedDate,
+            existingResults: service.resultsForDate(
+              initialDate ?? recognizedDate ?? DateTime.now(),
+            ),
+          );
+      if (ocr is MlKitLabOcrService) {
+        await ocr.close();
+      }
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      final savedDate = await Navigator.of(context).push<DateTime>(
+        MaterialPageRoute(
+          builder: (_) => LabCaptureReviewScreen(
+            labResultService: service,
+            labTestSettingsService: activeSettings,
+            candidates: candidates,
+            initialDate: initialDate ?? recognizedDate,
+            onPickAgain: () {
+              Navigator.of(context).pop();
+              _openPhotoCapture(context, initialDate: initialDate);
+            },
+            onDirectInput: () {
+              Navigator.of(context).pop();
+              _openForm(context, initialDate: initialDate);
+            },
+          ),
+        ),
+      );
+      if (context.mounted && savedDate != null) {
+        await _openDetail(context, savedDate);
+      }
+    } catch (_) {
+      if (ocr is MlKitLabOcrService) {
+        await ocr.close();
+      }
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => LabCaptureReviewScreen(
+            labResultService: service,
+            labTestSettingsService: activeSettings,
+            candidates: const [],
+            initialDate: initialDate,
+            onPickAgain: () {
+              Navigator.of(context).pop();
+              _openPhotoCapture(context, initialDate: initialDate);
+            },
+            onDirectInput: () {
+              Navigator.of(context).pop();
+              _openForm(context, initialDate: initialDate);
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  DateTime? _reviewDate(Iterable<DateTime?> dates) {
+    final values = {
+      for (final date in dates.whereType<DateTime>())
+        LabResult.formatDateKey(date): date,
+    };
+    return values.length == 1 ? values.values.single : null;
+  }
+
   Future<void> _openDetail(BuildContext context, DateTime date) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -141,6 +283,8 @@ class LabScreen extends StatelessWidget {
     );
   }
 }
+
+enum _LabInputChoice { direct, photo }
 
 class LabResultDetailScreen extends StatelessWidget {
   const LabResultDetailScreen({
