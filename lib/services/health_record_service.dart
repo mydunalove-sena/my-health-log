@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../core/validation/weight_input_rules.dart';
 import '../models/health_record.dart';
 import 'app_database.dart';
 
@@ -14,6 +15,10 @@ class EmptyHealthRecordException implements Exception {
 
 class FutureHealthRecordDateException implements Exception {
   const FutureHealthRecordDateException();
+}
+
+class InvalidHealthRecordWeightException implements Exception {
+  const InvalidHealthRecordWeightException();
 }
 
 abstract class HealthRecordStorage {
@@ -59,6 +64,10 @@ class HealthRecordService extends ChangeNotifier {
     }
     if (!record.hasAnyHealthValue) {
       throw const EmptyHealthRecordException();
+    }
+    final weight = record.weight;
+    if (weight != null && WeightInputRules.validateValue(weight).isBlock) {
+      throw const InvalidHealthRecordWeightException();
     }
 
     final currentIndex = _records.indexWhere((item) => item.id == record.id);

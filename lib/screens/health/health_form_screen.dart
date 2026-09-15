@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/validation/weight_input_rules.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/health_record.dart';
 import '../../services/health_field_visibility_service.dart';
 import '../../services/health_record_service.dart';
+import '../../services/lab_ocr_service.dart';
+import '../../services/weight_capture_orchestrator.dart';
+import '../../services/weight_capture_parser_service.dart';
+import '../../services/weight_image_picker_service.dart';
+import 'weight_capture_review_screen.dart';
 
 class HealthFormScreen extends StatefulWidget {
   const HealthFormScreen({
@@ -13,11 +20,19 @@ class HealthFormScreen extends StatefulWidget {
     required this.service,
     this.record,
     this.healthFieldVisibilityService,
+    this.weightImagePickerService,
+    this.weightOcrService,
+    this.weightParserService = const WeightCaptureParserService(),
+    this.weightCaptureOrchestrator,
   });
 
   final HealthRecordService service;
   final HealthRecord? record;
   final HealthFieldVisibilityService? healthFieldVisibilityService;
+  final WeightImagePickerService? weightImagePickerService;
+  final LabOcrService? weightOcrService;
+  final WeightCaptureParserService weightParserService;
+  final WeightCaptureOrchestrator? weightCaptureOrchestrator;
 
   @override
   State<HealthFormScreen> createState() => _HealthFormScreenState();
@@ -131,8 +146,21 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
                       label: '체중',
                       controller: _weightController,
                       unit: 'kg',
-                      validator: (value) =>
-                          _positiveDoubleValidator(value, '체중'),
+                      inputFormatters: [WeightInputRules.formatter],
+                      validator: (value) => WeightInputRules.validate(
+                        value,
+                        required: false,
+                      ).message,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        key: const Key('health-weight-photo-button'),
+                        onPressed: _openWeightCaptureChoice,
+                        icon: const Icon(Icons.photo_camera_outlined),
+                        label: const Text('사진/캡처로 입력'),
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.md),
                   ],
@@ -273,11 +301,108 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
     }
   }
 
+  Future<void> _openWeightCaptureChoice() async {
+    final source = await showModalBottomSheet<WeightImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                key: const Key('weight-capture-camera-button'),
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('카메라 촬영'),
+                onTap: () => Navigator.pop(context, WeightImageSource.camera),
+              ),
+              ListTile(
+                key: const Key('weight-capture-gallery-button'),
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('갤러리에서 선택'),
+                onTap: () => Navigator.pop(context, WeightImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || source == null) {
+      return;
+    }
+    await _openWeightCapture(source);
+  }
+
+  Future<void> _openWeightCapture(WeightImageSource source) async {
+    final picker =
+        widget.weightImagePickerService ??
+        ImagePickerWeightImagePickerService();
+    final imagePath = await picker.pickImage(source);
+    if (!mounted || imagePath == null) {
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    final ocr = widget.weightOcrService ?? MlKitLabOcrService();
+    try {
+      final orchestrator =
+          widget.weightCaptureOrchestrator ??
+          WeightCaptureOrchestrator(parserService: widget.weightParserService);
+      final result = await orchestrator.capture(
+        imagePath: imagePath,
+        ocrService: ocr,
+      );
+      if (ocr is MlKitLabOcrService) {
+        await ocr.close();
+      }
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop();
+      final savedDate = await Navigator.of(context).push<DateTime>(
+        MaterialPageRoute(
+          builder: (_) => WeightCaptureReviewScreen(
+            service: widget.service,
+            candidate: result.candidate,
+            initialDate: _selectedDate,
+            diagnosticDocuments: result.documents,
+            showOcrDiagnostics: false,
+          ),
+        ),
+      );
+      if (mounted && savedDate != null) {
+        Navigator.of(context).pop();
+      }
+    } catch (_) {
+      if (ocr is MlKitLabOcrService) {
+        await ocr.close();
+      }
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop();
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => WeightCaptureReviewScreen(
+            service: widget.service,
+            candidate: null,
+            initialDate: _selectedDate,
+            showOcrDiagnostics: false,
+          ),
+        ),
+      );
+    }
+  }
+
   Future<bool> _confirmLeave() async {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('변경사항을 저장하지 않았습니다.'),
+        title: const Text('변경사항을 저장하지 않았습니다'),
         content: const Text('화면을 나가시겠습니까?'),
         actions: [
           TextButton(
@@ -306,7 +431,7 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
 
     if (!_bloodPressurePairValid) {
       setState(() {
-        _formError = '혈압은 수축기와 이완기를 함께 입력해주세요.';
+        _formError = '혈압은 수축기와 이완기를 함께 입력해 주세요.';
       });
       return;
     }
@@ -341,7 +466,7 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
 
     if (!record.hasAnyHealthValue) {
       setState(() {
-        _formError = '하나 이상의 건강 항목을 입력해주세요.';
+        _formError = '하나 이상의 건강 항목을 입력해 주세요.';
       });
       return;
     }
@@ -360,7 +485,12 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
       return;
     } on EmptyHealthRecordException {
       setState(() {
-        _formError = '하나 이상의 건강 항목을 입력해주세요.';
+        _formError = '하나 이상의 건강 항목을 입력해 주세요.';
+      });
+      return;
+    } on InvalidHealthRecordWeightException {
+      setState(() {
+        _formError = WeightInputRules.blockMessage;
       });
       return;
     }
@@ -369,8 +499,8 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
       return;
     }
     final message = _isEdit || existingSameDate != null
-        ? '✓ 수정되었습니다.'
-        : '✓ 저장되었습니다.';
+        ? '기록을 수정했습니다.'
+        : '기록을 저장했습니다.';
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
     Navigator.of(context).pop();
@@ -425,10 +555,10 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
     }
     final parsed = double.tryParse(text);
     if (parsed == null) {
-      return '$label은 숫자로 입력해주세요.';
+      return '$label은 숫자로 입력해 주세요.';
     }
     if (parsed <= 0) {
-      return '$label은 0보다 큰 값으로 입력해주세요.';
+      return '$label은 0보다 큰 값으로 입력해 주세요.';
     }
     return null;
   }
@@ -440,10 +570,10 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
     }
     final parsed = int.tryParse(text);
     if (parsed == null) {
-      return '$label은 숫자로 입력해주세요.';
+      return '$label은 숫자로 입력해 주세요.';
     }
     if (parsed <= 0) {
-      return '$label은 0보다 큰 값으로 입력해주세요.';
+      return '$label은 0보다 큰 값으로 입력해 주세요.';
     }
     return null;
   }
@@ -455,10 +585,10 @@ class _HealthFormScreenState extends State<HealthFormScreen> {
     }
     final parsed = int.tryParse(text);
     if (parsed == null) {
-      return '$label 혈압은 숫자로 입력해주세요.';
+      return '$label 혈압은 숫자로 입력해 주세요.';
     }
     if (parsed <= 0) {
-      return '$label 혈압은 0보다 큰 값으로 입력해주세요.';
+      return '$label 혈압은 0보다 큰 값으로 입력해 주세요.';
     }
     return null;
   }
@@ -532,12 +662,14 @@ class _NumberField extends StatelessWidget {
     required this.controller,
     required this.validator,
     this.unit,
+    this.inputFormatters,
   });
 
   final String label;
   final TextEditingController controller;
   final String? unit;
   final FormFieldValidator<String> validator;
+  final List<TextInputFormatter>? inputFormatters;
 
   @override
   Widget build(BuildContext context) {
@@ -549,6 +681,7 @@ class _NumberField extends StatelessWidget {
         TextFormField(
           controller: controller,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: inputFormatters,
           decoration: _inputDecoration(unit),
           validator: validator,
         ),

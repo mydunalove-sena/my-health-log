@@ -283,7 +283,7 @@ V2 상세 문서는 `docs/v2/`에서 확인할 수 있습니다.
 
 V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 필요한 복약, 증상, 건강기록 설정, 운동 기록을 확장한 버전입니다.
 
-현재 코드 기준 버전은 `3.6.0+12`이며, databaseVersion 8을 유지하고 backupVersion은 6입니다.
+현재 코드 기준 버전은 `3.8.0+14`이며, databaseVersion 8을 유지하고 backupVersion은 6입니다.
 
 ### V3 주요 변경
 
@@ -425,7 +425,7 @@ V3는 V2 로컬 백업/복원 기준을 유지하면서 실제 사용 흐름에 
 
 | Item | Result |
 | --- | --- |
-| Current app version | `3.6.0+12` |
+| Current app version | `3.8.0+14` |
 | `flutter analyze` | PASS: No issues found |
 | V3.6 related regression | PASS: 65/65 |
 | Full `flutter test` | PASS: 285/285 |
@@ -463,11 +463,20 @@ V3 상세 요구사항, 테스트 케이스, 변경 이력은 `docs/v3/`에서 �
 | Exercise unit label | Fixed: `steps` -> `걸음` |
 | ADB multi-user install issue | Documented and recovered for User 95 DUAL_APP |
 
+### V3.8 Weight Smart Capture
+
+- InBody photo-assisted weight input uses one Korean ML Kit OCR pass, `InBodyWeightOcrParser`, and Review prefill for the confirmed 50.3kg InBody path.
+- Non-InBody images fall back to blank Manual Review. General LCD automatic recognition is NOT SUPPORTED and was removed after real-photo validation.
+- Weight direct input and Weight Review share `lib/core/validation/weight_input_rules.dart`.
+- Shared validation allows ASCII digits with one `.` and at most 2 decimal places.
+- Shared range validation allows 15kg through 500kg and blocks values below 15kg or above 500kg.
+- Invalid character and paste protection blocks Korean, English, Japanese, Chinese, full-width digits, spaces, and special characters.
+
 ## Release
 
-- Current App Version: `3.6.0+12`
-- Current Code State: V3.6.0 code committed and pushed on branch `v3`
-- Current V3 HEAD: `efbfc06c1faabcc2bad39880190213f8f13c998d`
+- Current App Version: `3.8.0+14`
+- Current Code State: V3.8 Weight Smart Capture code on branch `v3`
+- Current V3 HEAD: see git history on branch `v3`
 - Current Project Stage: personal real use, project documentation, and small-scale usability validation preparation
 - Latest confirmed local Release APK / Android update-install QA: V3.5.1
 - Confirmed V3.5.1 external APK copy: `C:\Users\jeongeun\Documents\Codex\MyHealthLog_V3.5.1.apk`
