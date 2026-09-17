@@ -296,17 +296,19 @@ void main() {
     testWidgets('capture save exits form and stores merged weight', (
       tester,
     ) async {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
       final existing = HealthRecord(
         id: 'same-day',
-        date: DateTime(2026, 9, 15),
+        date: today,
         systolicBloodPressure: 118,
         diastolicBloodPressure: 76,
         waterIntake: 1700,
         steps: 7200,
         sleepHours: 7,
         condition: HealthCondition.good,
-        createdAt: DateTime(2026, 9, 15, 6),
-        updatedAt: DateTime(2026, 9, 15, 7),
+        createdAt: today.add(const Duration(hours: 6)),
+        updatedAt: today.add(const Duration(hours: 7)),
       );
       final storage = CountingHealthRecordStorage([existing]);
       final service = HealthRecordService(storage);
