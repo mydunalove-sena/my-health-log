@@ -418,6 +418,8 @@ void main() {
       await tester.tap(find.byKey(const Key('lab-capture-check-0')));
       await tester.pumpAndSettle();
 
+      expect(find.byType(SimpleDialog), findsNothing);
+      expect(find.byType(AlertDialog), findsNothing);
       expect(settings.managementType, originalProfile);
       expect(settings.enabledLabTestIds, contains('total_cholesterol'));
       expect(candidate.value, 185);
@@ -481,7 +483,11 @@ void main() {
     await tester.tap(find.byKey(const Key('lab-capture-check-manual')));
     await tester.pumpAndSettle();
 
+    expect(find.byType(SimpleDialog), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
     expect(candidate.definition?.id, 'total_protein');
+    expect(candidate.displayName, 'Total Protein');
+    expect(find.text('Total Protein'), findsWidgets);
     expect(settings.enabledLabTestIds, contains('total_protein'));
     expect(candidate.isSelected, isTrue);
     expect(candidate.value, 8);
@@ -489,7 +495,7 @@ void main() {
     expect(labService.results, isEmpty);
   });
 
-  testWidgets('ambiguous OCR label requires explicit candidate selection', (
+  testWidgets('ambiguous OCR label stays unmapped without popup', (
     tester,
   ) async {
     final labService = await _labService();
@@ -500,23 +506,16 @@ void main() {
     await tester.tap(find.byKey(const Key('lab-capture-check-manual')));
     await tester.pumpAndSettle();
 
-    expect(find.text('검사 항목을 선택해 주세요'), findsOneWidget);
+    expect(find.byType(SimpleDialog), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
     expect(candidate.definition, isNull);
     expect(settings.enabledLabTestIds, isEmpty);
-
-    await tester.tap(
-      find.byKey(const Key('lab-capture-match-total_cholesterol')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(candidate.definition?.id, 'total_cholesterol');
-    expect(settings.enabledLabTestIds, contains('total_cholesterol'));
-    expect(candidate.isSelected, isTrue);
+    expect(candidate.isSelected, isFalse);
+    expect(candidate.value, 180);
+    expect(labService.results, isEmpty);
   });
 
-  testWidgets('search requires explicit selection and confirmation', (
-    tester,
-  ) async {
+  testWidgets('unknown OCR label stays unmapped without popup', (tester) async {
     final labService = await _labService();
     final settings = await _profileSettings(LabManagementType.custom);
     final candidate = _unmappedCandidate('Unknown Marker', 9);
@@ -525,77 +524,12 @@ void main() {
     await tester.tap(find.byKey(const Key('lab-capture-check-manual')));
     await tester.pumpAndSettle();
 
-    final search = tester.widget<TextField>(
-      find.byKey(const Key('lab-capture-definition-search')),
-    );
-    expect(search.controller!.text, 'Unknown Marker');
+    expect(find.byType(SimpleDialog), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
     expect(candidate.definition, isNull);
-    expect(find.byKey(const Key('lab-capture-search-cancel')), findsOneWidget);
-    expect(find.byKey(const Key('lab-capture-search-confirm')), findsOneWidget);
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const Key('lab-capture-search-confirm')),
-          )
-          .onPressed,
-      isNull,
-    );
-
-    await tester.enterText(
-      find.byKey(const Key('lab-capture-definition-search')),
-      'Creatinine',
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('lab-capture-search-creatinine')));
-    await tester.pump();
-
-    expect(candidate.definition, isNull);
-    expect(
-      tester
-          .widget<FilledButton>(
-            find.byKey(const Key('lab-capture-search-confirm')),
-          )
-          .onPressed,
-      isNotNull,
-    );
-    await tester.tap(find.byKey(const Key('lab-capture-search-confirm')));
-    await tester.pumpAndSettle();
-
-    expect(candidate.definition?.id, 'creatinine');
-    expect(settings.enabledLabTestIds, contains('creatinine'));
-    expect(candidate.isSelected, isTrue);
-    expect(candidate.value, 9);
-    expect(labService.results, isEmpty);
-  });
-
-  testWidgets('search cancellation leaves candidate and settings unchanged', (
-    tester,
-  ) async {
-    final labService = await _labService();
-    final settings = await _profileSettings(LabManagementType.dialysis);
-    final originalProfile = settings.managementType;
-    final originalEnabledIds = settings.enabledLabTestIds;
-    final candidate = _unmappedCandidate('Unknown Marker', 9, unit: 'IU/L');
-
-    await _pumpReview(tester, labService, settings, [candidate]);
-    await tester.tap(find.byKey(const Key('lab-capture-check-manual')));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('lab-capture-definition-search')),
-      'Creatinine',
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('lab-capture-search-creatinine')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('lab-capture-search-cancel')));
-    await tester.pumpAndSettle();
-
-    expect(candidate.definition, isNull);
+    expect(settings.enabledLabTestIds, isEmpty);
     expect(candidate.isSelected, isFalse);
     expect(candidate.value, 9);
-    expect(candidate.ocrUnit, 'IU/L');
-    expect(settings.enabledLabTestIds, originalEnabledIds);
-    expect(settings.managementType, originalProfile);
     expect(labService.results, isEmpty);
   });
 
@@ -621,41 +555,22 @@ void main() {
     expect(labService.results.single.value, isNot(174));
   });
 
-  testWidgets('orphan OCR value is savable after explicit mapping confirm', (
-    tester,
-  ) async {
+  testWidgets('orphan OCR value stays unmapped without popup', (tester) async {
     final labService = await _labService();
-    final settings = await _profileSettings(LabManagementType.kidneyTransplant);
-    final originalProfile = settings.managementType;
+    final settings = await _profileSettings(LabManagementType.custom);
     final candidate = _unmappedCandidate('', 174, unit: 'mg/dL');
 
     await _pumpReview(tester, labService, settings, [candidate]);
     await tester.tap(find.byKey(const Key('lab-capture-check-manual')));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('lab-capture-definition-search')),
-      'Creatinine',
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('lab-capture-search-creatinine')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('lab-capture-search-confirm')));
-    await tester.pumpAndSettle();
-
-    expect(candidate.definition?.id, 'creatinine');
-    expect(candidate.displayName, 'Creatinine');
+    expect(find.byType(SimpleDialog), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(candidate.definition, isNull);
     expect(candidate.value, 174);
     expect(candidate.ocrUnit, 'mg/dL');
-    expect(candidate.isSelected, isTrue);
-    expect(settings.enabledLabTestIds, contains('creatinine'));
-    expect(settings.managementType, originalProfile);
+    expect(candidate.isSelected, isFalse);
+    expect(settings.enabledLabTestIds, isEmpty);
     expect(labService.results, isEmpty);
-
-    await _tapSave(tester);
-    await tester.pumpAndSettle();
-    expect(labService.results, hasLength(1));
-    expect(labService.results.single.testName, 'Creatinine');
-    expect(labService.results.single.value, 174);
   });
 
   testWidgets('multiple disabled candidates are enabled independently', (

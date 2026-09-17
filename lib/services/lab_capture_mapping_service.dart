@@ -91,20 +91,6 @@ class LabCaptureMappingService {
   LabTestDefinition? matchDefinition(String ocrName) =>
       _matchDefinition(ocrName);
 
-  List<LabTestDefinition> matchingDefinitions(String ocrName) {
-    final exact = _matchDefinition(ocrName);
-    if (exact != null) return [exact];
-    final tokens = _searchTokens(ocrName);
-    if (tokens.isEmpty) return const [];
-    return [
-      for (final definition in definitions)
-        if (tokens.every(
-          (token) => _searchText(definition.displayName).contains(token),
-        ))
-          definition,
-    ];
-  }
-
   String canonicalKeyForName(String name) => _canonicalKeyForName(name);
 
   LabResult? existingForCandidate(
@@ -206,18 +192,6 @@ class LabCaptureMappingService {
         .trim()
         .toLowerCase();
   }
-
-  static List<String> _searchTokens(String value) =>
-      _searchText(value)
-          .split(' ')
-          .where((token) => token.length >= 2)
-          .toList();
-
-  static String _searchText(String value) => value
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9가-힣]+'), ' ')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
 
   static bool _unitsAreCompatible(String? left, String? right) {
     final normalizedLeft = _normalizeUnit(left);

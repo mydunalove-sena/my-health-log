@@ -178,20 +178,12 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
   Future<void> _selectCandidate(LabCaptureCandidate candidate) async {
     if (_enablingCandidateIds.contains(candidate.id)) return;
     _syncEditedValues();
-    var definition = candidate.definition;
-    if (definition == null) {
-      final mapping = LabCaptureMappingService(
-        widget.labTestSettingsService.allDefinitions,
-      );
-      final matches = mapping.matchingDefinitions(candidate.rawTestName);
-      if (matches.length == 1) {
-        definition = matches.single;
-      } else if (matches.length > 1) {
-        definition = await _chooseDefinition(matches);
-      } else {
-        definition = await _searchDefinition(candidate.rawTestName);
-      }
-      if (definition == null || !mounted) return;
+    final definition =
+        candidate.definition ??
+        LabCaptureMappingService(widget.labTestSettingsService.allDefinitions)
+            .matchDefinition(candidate.rawTestName);
+    if (definition == null) return;
+    if (candidate.definition == null) {
       candidate.mapTo(definition);
     }
     setState(() => _enablingCandidateIds.add(candidate.id));
@@ -209,35 +201,6 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
         setState(() => _enablingCandidateIds.remove(candidate.id));
       }
     }
-  }
-
-  Future<LabTestDefinition?> _chooseDefinition(
-    List<LabTestDefinition> definitions,
-  ) {
-    return showDialog<LabTestDefinition>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('검사 항목을 선택해 주세요'),
-        children: [
-          for (final definition in definitions)
-            SimpleDialogOption(
-              key: Key('lab-capture-match-${definition.id}'),
-              onPressed: () => Navigator.of(context).pop(definition),
-              child: Text(definition.displayName),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<LabTestDefinition?> _searchDefinition(String initialQuery) async {
-    return showDialog<LabTestDefinition>(
-      context: context,
-      builder: (context) => _LabDefinitionSearchDialog(
-        initialQuery: initialQuery,
-        definitions: widget.labTestSettingsService.allDefinitions,
-      ),
-    );
   }
 
   Future<void> _addPhotos() async {
@@ -559,15 +522,15 @@ class _CandidateTile extends StatelessWidget {
             onChanged: (_) => onChanged(),
           ),
           if (!candidate.isMapped)
-            const _Notice(text: '검사 항목 선택 필요', color: AppColors.error),
+            _Notice(
+              text: candidate.hasRecognizedTestName
+                  ? '검사 항목을 확인할 수 없습니다. 저장에서 제외됩니다.'
+                  : '검사 항목을 인식하지 못했습니다. 저장에서 제외됩니다.',
+              color: AppColors.error,
+            ),
           if (candidate.isMapped && !isEnabled) ...[
             const _Notice(text: '현재 검사 목록에 없는 항목입니다.', color: AppColors.error),
           ],
-          if (!candidate.hasRecognizedTestName && !candidate.isMapped)
-            const _Notice(
-              text: '검사 항목을 인식하지 못했습니다. 저장에서 제외됩니다.',
-              color: AppColors.error,
-            ),
           if (candidate.hasImportConflict)
             const _Notice(
               text: '같은 검사 항목에서 서로 다른 값이 인식되었습니다.',
@@ -588,106 +551,6 @@ class _CandidateTile extends StatelessWidget {
             const _Notice(text: '인식 단위와 설정 단위가 다릅니다.', color: AppColors.error),
         ],
       ),
-    );
-  }
-}
-
-class _LabDefinitionSearchDialog extends StatefulWidget {
-  const _LabDefinitionSearchDialog({
-    required this.initialQuery,
-    required this.definitions,
-  });
-
-  final String initialQuery;
-  final List<LabTestDefinition> definitions;
-
-  @override
-  State<_LabDefinitionSearchDialog> createState() =>
-      _LabDefinitionSearchDialogState();
-}
-
-class _LabDefinitionSearchDialogState
-    extends State<_LabDefinitionSearchDialog> {
-  late final TextEditingController _controller;
-  LabTestDefinition? _selectedDefinition;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialQuery);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final query = _controller.text.trim().toLowerCase();
-    final matches = query.isEmpty
-        ? const <LabTestDefinition>[]
-        : widget.definitions
-              .where(
-                (definition) =>
-                    definition.displayName.toLowerCase().contains(query),
-              )
-              .toList();
-    return AlertDialog(
-      title: const Text('검사 항목 검색'),
-      content: SizedBox(
-        width: double.maxFinite,
-        height: 320,
-        child: Column(
-          children: [
-            TextField(
-              key: const Key('lab-capture-definition-search'),
-              controller: _controller,
-              decoration: const InputDecoration(
-                labelText: '검사명',
-                prefixIcon: Icon(Icons.search),
-              ),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Expanded(
-              child: matches.isEmpty
-                  ? const Center(child: Text('일치하는 검사 항목이 없습니다.'))
-                  : RadioGroup<LabTestDefinition>(
-                      groupValue: _selectedDefinition,
-                      onChanged: (value) {
-                        setState(() => _selectedDefinition = value);
-                      },
-                      child: ListView(
-                        children: [
-                          for (final definition in matches)
-                            RadioListTile<LabTestDefinition>(
-                              key: Key('lab-capture-search-${definition.id}'),
-                              value: definition,
-                              title: Text(definition.displayName),
-                            ),
-                        ],
-                      ),
-                    ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          key: const Key('lab-capture-search-cancel'),
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('취소'),
-        ),
-        FilledButton(
-          key: const Key('lab-capture-search-confirm'),
-          onPressed: _selectedDefinition == null
-              ? null
-              : () => Navigator.of(context).pop(_selectedDefinition),
-          child: const Text('확인'),
-        ),
-      ],
     );
   }
 }
