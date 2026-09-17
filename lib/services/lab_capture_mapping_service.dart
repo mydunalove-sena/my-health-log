@@ -29,6 +29,7 @@ class LabCaptureMappingService {
     List<ParsedLabCaptureCandidate> parsed, {
     DateTime? date,
     List<LabResult> existingResults = const [],
+    String idPrefix = '',
   }) {
     final candidates = <LabCaptureCandidate>[];
     var nextId = 0;
@@ -63,7 +64,7 @@ class LabCaptureMappingService {
       }
 
       final candidate = LabCaptureCandidate(
-        id: (nextId++).toString(),
+        id: '$idPrefix${nextId++}',
         rawTestName: item.rawTestName,
         value: item.value,
         ocrUnit: item.unit,

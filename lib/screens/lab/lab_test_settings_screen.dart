@@ -29,7 +29,7 @@ class LabTestSettingsScreen extends StatelessWidget {
               children: [
                 Text('관리 유형', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: AppSpacing.sm),
-                _ManagementTypeList(service: service),
+                _ManagementTypeMenu(service: service),
                 const SizedBox(height: AppSpacing.xl),
                 Row(
                   children: [
@@ -108,41 +108,55 @@ class LabTestSettingsScreen extends StatelessWidget {
   }
 }
 
-class _ManagementTypeList extends StatelessWidget {
-  const _ManagementTypeList({required this.service});
+class _ManagementTypeMenu extends StatelessWidget {
+  const _ManagementTypeMenu({required this.service});
 
   final LabTestSettingsService service;
 
   @override
   Widget build(BuildContext context) {
+    final selectedIsVisible = visibleLabManagementTypes.contains(
+      service.managementType,
+    );
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: AppColors.border),
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: Column(
-          children: [
-            for (var i = 0; i < LabManagementType.values.length; i++) ...[
-              ListTile(
-                key: Key(
-                  'lab-management-type-${LabManagementType.values[i].id}',
+      child: ListTile(
+        leading: PopupMenuButton<LabManagementType>(
+          key: const Key('lab-management-type-menu'),
+          tooltip: '검사 프로필 선택',
+          icon: const Icon(Icons.menu),
+          onSelected: (type) => _selectType(context, type),
+          itemBuilder: (context) => [
+            for (final type in visibleLabManagementTypes)
+              PopupMenuItem(
+                key: Key('lab-management-type-${type.id}'),
+                value: type,
+                child: Row(
+                  children: [
+                    Icon(
+                      type == service.managementType
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(type.displayName),
+                  ],
                 ),
-                leading: Icon(
-                  LabManagementType.values[i] == service.managementType
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                ),
-                title: Text(LabManagementType.values[i].displayName),
-                onTap: () => _selectType(context, LabManagementType.values[i]),
               ),
-              if (i != LabManagementType.values.length - 1)
-                const Divider(height: 1, color: AppColors.border),
-            ],
           ],
         ),
+        title: Text(
+          selectedIsVisible ? service.managementType.displayName : '저장된 프로필',
+        ),
+        subtitle: selectedIsVisible
+            ? const Text('☰ 버튼을 눌러 프로필을 변경하세요.')
+            : Text(
+                '${service.managementType.displayName} 프로필은 유지되며 현재 선택 메뉴에서는 숨겨집니다.',
+              ),
       ),
     );
   }

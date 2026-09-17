@@ -9,6 +9,9 @@ import '../../services/lab_capture_mapping_service.dart';
 import '../../services/lab_result_service.dart';
 import '../../services/lab_test_settings_service.dart';
 
+typedef AddLabCapturePhotos =
+    Future<List<ParsedLabCaptureCandidate>> Function();
+
 class LabCaptureReviewScreen extends StatefulWidget {
   const LabCaptureReviewScreen({
     super.key,
@@ -18,6 +21,7 @@ class LabCaptureReviewScreen extends StatefulWidget {
     this.initialDate,
     this.onPickAgain,
     this.onDirectInput,
+    this.onAddPhotos,
   });
 
   final LabResultService labResultService;
@@ -26,6 +30,7 @@ class LabCaptureReviewScreen extends StatefulWidget {
   final DateTime? initialDate;
   final VoidCallback? onPickAgain;
   final VoidCallback? onDirectInput;
+  final AddLabCapturePhotos? onAddPhotos;
 
   @override
   State<LabCaptureReviewScreen> createState() => _LabCaptureReviewScreenState();
@@ -37,6 +42,8 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
   final Map<String, TextEditingController> _valueControllers = {};
   String? _formError;
   bool _isSaving = false;
+  bool _isAddingPhotos = false;
+  int _addedBatchCount = 0;
 
   @override
   void initState() {
@@ -125,6 +132,21 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
               ),
               const SizedBox(height: AppSpacing.sm),
               SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const Key('lab-capture-add-photos-button'),
+                  onPressed: _isSaving || _isAddingPhotos ? null : _addPhotos,
+                  icon: _isAddingPhotos
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.add_photo_alternate_outlined),
+                  label: const Text('+ 사진 추가'),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              SizedBox(
                 height: 52,
                 width: double.infinity,
                 child: FilledButton(
@@ -139,6 +161,91 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
       ),
     );
   }
+
+  Future<void> _addPhotos() async {
+    final addPhotos = widget.onAddPhotos;
+    if (addPhotos == null) return;
+    _syncEditedValues();
+    setState(() {
+      _formError = null;
+      _isAddingPhotos = true;
+    });
+    try {
+      final parsed = await addPhotos();
+      if (!mounted || parsed.isEmpty) return;
+      final additions =
+          LabCaptureMappingService(widget.labTestSettingsService.allDefinitions)
+              .map(
+                parsed,
+                date: _selectedDate,
+                existingResults: widget.labResultService.resultsForDate(
+                  _selectedDate,
+                ),
+                idPrefix: 'added-${_addedBatchCount++}-',
+              );
+      setState(() {
+        for (final addition in additions) {
+          _mergeCandidate(addition);
+        }
+        _refreshExistingRows();
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _formError = '추가 사진을 분석하지 못했습니다. 다시 시도해 주세요.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isAddingPhotos = false);
+      }
+    }
+  }
+
+  void _syncEditedValues() {
+    for (final candidate in _candidates) {
+      final value = double.tryParse(
+        _valueControllers[candidate.id]?.text.trim() ?? '',
+      );
+      if (value != null && !value.isNaN && !value.isInfinite) {
+        candidate.value = value;
+      }
+    }
+  }
+
+  void _mergeCandidate(LabCaptureCandidate addition) {
+    final mapping = LabCaptureMappingService(
+      widget.labTestSettingsService.allDefinitions,
+    );
+    final additionKey = mapping.canonicalKeyForName(addition.displayName);
+    final matches = _candidates.where(
+      (candidate) =>
+          mapping.canonicalKeyForName(candidate.displayName) == additionKey,
+    );
+    for (final existing in matches) {
+      if (existing.value == addition.value &&
+          _normalizedUnit(existing.saveUnit) ==
+              _normalizedUnit(addition.saveUnit)) {
+        for (final index in addition.sourceImageIndices) {
+          if (!existing.sourceImageIndices.contains(index)) {
+            existing.sourceImageIndices.add(index);
+          }
+        }
+        return;
+      }
+      existing.hasImportConflict = true;
+      existing.isSelected = false;
+      addition.hasImportConflict = true;
+      addition.isSelected = false;
+    }
+    _candidates.add(addition);
+    _valueControllers[addition.id] = TextEditingController(
+      text: formatLabCaptureValue(addition.value),
+    );
+  }
+
+  String _normalizedUnit(String? value) =>
+      (value ?? '').replaceAll(RegExp(r'[()\\s]'), '').toLowerCase();
 
   Future<void> _pickDate() async {
     final now = DateTime.now();

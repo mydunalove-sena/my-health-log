@@ -58,6 +58,30 @@ void main() {
     );
   });
 
+  test(
+    'hidden management types remain defined and stored without conversion',
+    () async {
+      expect(
+        LabManagementType.values,
+        contains(LabManagementType.liverTransplant),
+      );
+      expect(
+        visibleLabManagementTypes,
+        isNot(contains(LabManagementType.liverTransplant)),
+      );
+
+      final service = await _persistentService();
+      await service.setManagementType(LabManagementType.liverTransplant);
+      final reloaded = await _persistentService();
+
+      expect(reloaded.managementType, LabManagementType.liverTransplant);
+      expect(
+        reloaded.enabledLabTestIds,
+        defaultLabTestIdsByManagementType[LabManagementType.liverTransplant],
+      );
+    },
+  );
+
   test('enabled lab test IDs are saved and loaded', () async {
     final service = await _persistentService();
 

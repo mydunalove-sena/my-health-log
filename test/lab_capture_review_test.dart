@@ -318,6 +318,86 @@ void main() {
     expect(find.byKey(const Key('lab-capture-save-button')), findsOneWidget);
     expect(labService.results, isEmpty);
   });
+
+  testWidgets(
+    'review adds second and third photo results while preserving user edits',
+    (tester) async {
+      final labService = await _labService();
+      final settings = await _settings();
+      final additions = <List<ParsedLabCaptureCandidate>>[
+        [_parsed('Albumin', 4.5)],
+        [_parsed('Creatinine', 1.21)],
+      ];
+
+      await _pumpReview(
+        tester,
+        labService,
+        settings,
+        _mappedCandidates([_parsed('BUN', 19.4)]),
+        onAddPhotos: () async => additions.removeAt(0),
+      );
+      await tester.enterText(
+        find.byKey(const Key('lab-capture-value-0')),
+        '20.1',
+      );
+
+      await _tapAddPhotos(tester);
+      expect(
+        find.byKey(const Key('lab-capture-candidate-added-0-0')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('lab-capture-value-0')))
+            .controller!
+            .text,
+        '20.1',
+      );
+      expect(labService.results, isEmpty);
+
+      await _tapAddPhotos(tester);
+      expect(
+        find.byKey(const Key('lab-capture-candidate-added-1-0')),
+        findsOneWidget,
+      );
+      expect(labService.results, isEmpty);
+
+      await _tapSave(tester);
+      await tester.pumpAndSettle();
+      expect(labService.results, hasLength(3));
+      expect(
+        labService.results.singleWhere((item) => item.testName == 'BUN').value,
+        20.1,
+      );
+    },
+  );
+
+  testWidgets(
+    'added conflicting result is visible and never silently overwrites',
+    (tester) async {
+      final labService = await _labService();
+      final settings = await _settings();
+      final initial = _mappedCandidates([_parsed('Creatinine', 1.21)]);
+
+      await _pumpReview(
+        tester,
+        labService,
+        settings,
+        initial,
+        onAddPhotos: () async => [_parsed('Creatinine', 1.19)],
+      );
+      await _tapAddPhotos(tester);
+
+      expect(find.byKey(const Key('lab-capture-candidate-0')), findsOneWidget);
+      expect(
+        find.byKey(const Key('lab-capture-candidate-added-0-0')),
+        findsOneWidget,
+      );
+      expect(initial.single.hasImportConflict, isTrue);
+      expect(initial.single.isSelected, isFalse);
+      expect(labService.results, isEmpty);
+    },
+  );
 }
 
 Future<void> _pumpReview(
@@ -326,6 +406,7 @@ Future<void> _pumpReview(
   LabTestSettingsService settings,
   List<LabCaptureCandidate> candidates, {
   DateTime? initialDate,
+  AddLabCapturePhotos? onAddPhotos,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -334,9 +415,21 @@ Future<void> _pumpReview(
         labTestSettingsService: settings,
         candidates: candidates,
         initialDate: initialDate,
+        onAddPhotos: onAddPhotos,
       ),
     ),
   );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _tapAddPhotos(WidgetTester tester) async {
+  final add = find.byKey(const Key('lab-capture-add-photos-button'));
+  await tester.scrollUntilVisible(
+    add,
+    120,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.tap(add);
   await tester.pumpAndSettle();
 }
 

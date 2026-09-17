@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/lab_test_definitions.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/lab_result.dart';
+import '../../models/lab_capture_candidate.dart';
+import '../../models/lab_test_definition.dart';
 import '../../services/lab_capture_mapping_service.dart';
 import '../../services/lab_image_picker_service.dart';
 import '../../services/lab_ocr_service.dart';
@@ -38,8 +41,43 @@ class LabScreen extends StatelessWidget {
         final groups = service.groups;
         return Scaffold(
           appBar: AppBar(
-            title: const Text('\uAC80\uC0AC \uACB0\uACFC'),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('\uAC80\uC0AC \uACB0\uACFC'),
+                if (labTestSettingsService != null)
+                  Text(
+                    labTestSettingsService!.managementType.displayName,
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+              ],
+            ),
             actions: [
+              if (labTestSettingsService != null)
+                PopupMenuButton<LabManagementType>(
+                  key: const Key('lab-profile-menu-button'),
+                  tooltip: '검사 프로필 선택',
+                  icon: const Icon(Icons.menu),
+                  onSelected: (type) => _selectProfile(context, type),
+                  itemBuilder: (context) => [
+                    for (final type in visibleLabManagementTypes)
+                      PopupMenuItem(
+                        key: Key('lab-profile-${type.id}'),
+                        value: type,
+                        child: Row(
+                          children: [
+                            Icon(
+                              type == labTestSettingsService!.managementType
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Text(type.displayName),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               IconButton(
                 key: const Key('lab-settings-button'),
                 tooltip: '\uAC80\uC0AC \uC124\uC815',
@@ -91,6 +129,44 @@ class LabScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _selectProfile(
+    BuildContext context,
+    LabManagementType type,
+  ) async {
+    final settings = labTestSettingsService;
+    if (settings == null || type == settings.managementType) return;
+    final preset = defaultLabTestIdsByManagementType[settings.managementType]!;
+    final enabled = settings.enabledLabTestIds;
+    final personalized =
+        enabled.length != preset.length ||
+        List.generate(
+          enabled.length,
+          (index) => index,
+        ).any((index) => enabled[index] != preset[index]);
+    if (personalized) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('관리 유형 변경'),
+          content: const Text('관리 유형을 변경하면 선택한 검사 항목이 새 프로필의 기본 검사 세트로 변경됩니다.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              key: const Key('lab-profile-change-confirm-button'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('변경'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    await settings.setManagementType(type);
   }
 
   Future<void> _openInputChoice(
@@ -191,15 +267,15 @@ class LabScreen extends StatelessWidget {
     final picker = imagePickerService ?? ImagePickerLabImagePickerService();
     final imagePaths = await picker.pickImages();
     if (!context.mounted || imagePaths.isEmpty) return;
+    final processedPaths = imagePaths.toSet();
 
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
-    final ocr = ocrService ?? MlKitLabOcrService();
     try {
-      final documents = await ocr.recognize(imagePaths);
+      final documents = await _recognizeImages(imagePaths);
       final parsed = const SeveranceLabOcrParser().parse(documents);
       final recognizedDate = _reviewDate(parsed.map((item) => item.date));
       final candidates = LabCaptureMappingService(activeSettings.allDefinitions)
@@ -210,9 +286,6 @@ class LabScreen extends StatelessWidget {
               initialDate ?? recognizedDate ?? DateTime.now(),
             ),
           );
-      if (ocr is MlKitLabOcrService) {
-        await ocr.close();
-      }
       if (!context.mounted) return;
       Navigator.of(context).pop();
       final savedDate = await Navigator.of(context).push<DateTime>(
@@ -222,6 +295,16 @@ class LabScreen extends StatelessWidget {
             labTestSettingsService: activeSettings,
             candidates: candidates,
             initialDate: initialDate ?? recognizedDate,
+            onAddPhotos: () async {
+              final pickedPaths = await picker.pickImages();
+              final newPaths = [
+                for (final path in pickedPaths)
+                  if (processedPaths.add(path)) path,
+              ];
+              if (newPaths.isEmpty) return const [];
+              final addedDocuments = await _recognizeImages(newPaths);
+              return const SeveranceLabOcrParser().parse(addedDocuments);
+            },
             onPickAgain: () {
               Navigator.of(context).pop();
               _openPhotoCapture(context, initialDate: initialDate);
@@ -237,9 +320,6 @@ class LabScreen extends StatelessWidget {
         await _openDetail(context, savedDate);
       }
     } catch (_) {
-      if (ocr is MlKitLabOcrService) {
-        await ocr.close();
-      }
       if (!context.mounted) return;
       Navigator.of(context).pop();
       await Navigator.of(context).push<void>(
@@ -260,6 +340,17 @@ class LabScreen extends StatelessWidget {
           ),
         ),
       );
+    }
+  }
+
+  Future<List<LabOcrDocument>> _recognizeImages(List<String> imagePaths) async {
+    final ocr = ocrService ?? MlKitLabOcrService();
+    try {
+      return await ocr.recognize(imagePaths);
+    } finally {
+      if (ocrService == null && ocr is MlKitLabOcrService) {
+        await ocr.close();
+      }
     }
   }
 

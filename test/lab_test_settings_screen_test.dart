@@ -33,13 +33,72 @@ void main() {
 
       expect(find.text('검사 설정'), findsOneWidget);
       expect(find.text(settings.managementType.displayName), findsOneWidget);
-      for (final type in LabManagementType.values) {
-        expect(find.text(type.displayName), findsOneWidget);
+      await tester.tap(find.byKey(const Key('lab-management-type-menu')));
+      await tester.pumpAndSettle();
+      for (final type in visibleLabManagementTypes) {
+        expect(find.text(type.displayName), findsWidgets);
         expect(
           find.byKey(Key('lab-management-type-${type.id}')),
           findsOneWidget,
         );
       }
+      for (final type in const [
+        LabManagementType.liverTransplant,
+        LabManagementType.lungTransplant,
+        LabManagementType.pancreasTransplant,
+      ]) {
+        expect(find.text(type.displayName), findsNothing);
+        expect(find.byKey(Key('lab-management-type-${type.id}')), findsNothing);
+      }
+    },
+  );
+
+  testWidgets(
+    'lab screen hamburger shows only visible profiles and persists selection',
+    (tester) async {
+      final labService = await _labService();
+      final settings = await _settings();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LabScreen(
+            service: labService,
+            labTestSettingsService: settings,
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('lab-profile-menu-button')));
+      await tester.pumpAndSettle();
+
+      for (final type in visibleLabManagementTypes) {
+        expect(find.byKey(Key('lab-profile-${type.id}')), findsOneWidget);
+      }
+      for (final type in const [
+        LabManagementType.liverTransplant,
+        LabManagementType.lungTransplant,
+        LabManagementType.pancreasTransplant,
+      ]) {
+        expect(find.byKey(Key('lab-profile-${type.id}')), findsNothing);
+      }
+
+      await tester.tap(find.byKey(const Key('lab-profile-dialysis')));
+      await tester.pumpAndSettle();
+      expect(settings.managementType, LabManagementType.dialysis);
+
+      final reloaded = await _settings();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LabScreen(
+            service: labService,
+            labTestSettingsService: reloaded,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining(reloaded.managementType.displayName),
+        findsOneWidget,
+      );
     },
   );
 
@@ -50,6 +109,8 @@ void main() {
     await settings.setEnabledLabTestIds(['creatinine']);
 
     await _pumpSettings(tester, settings);
+    await tester.tap(find.byKey(const Key('lab-management-type-menu')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('lab-management-type-dialysis')));
     await tester.pumpAndSettle();
 
@@ -61,6 +122,8 @@ void main() {
     expect(settings.managementType, LabManagementType.generalHealth);
     expect(settings.enabledLabTestIds, ['creatinine']);
 
+    await tester.tap(find.byKey(const Key('lab-management-type-menu')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('lab-management-type-dialysis')));
     await tester.pumpAndSettle();
     await tester.tap(
@@ -79,6 +142,8 @@ void main() {
     final settings = await _settings();
 
     await _pumpSettings(tester, settings);
+    await tester.tap(find.byKey(const Key('lab-management-type-menu')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('lab-management-type-custom')));
     await tester.pumpAndSettle();
 

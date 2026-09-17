@@ -45,3 +45,10 @@ enum LabManagementType {
     return LabManagementType.generalHealth;
   }
 }
+
+const visibleLabManagementTypes = <LabManagementType>[
+  LabManagementType.kidneyTransplant,
+  LabManagementType.dialysis,
+  LabManagementType.generalHealth,
+  LabManagementType.custom,
+];
