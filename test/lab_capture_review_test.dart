@@ -389,7 +389,6 @@ void main() {
 
     expect(candidate.isSelected, isTrue);
     expect(find.text('현재 검사 목록에 없는 항목입니다.'), findsNothing);
-    expect(find.byKey(const Key('lab-capture-enable-0')), findsNothing);
   });
 
   testWidgets(
@@ -407,13 +406,16 @@ void main() {
       expect(candidate.isSelected, isFalse);
       expect(find.text('현재 검사 목록에 없는 항목입니다.'), findsOneWidget);
       expect(find.text('Total Cholesterol'), findsWidgets);
-      expect(find.byKey(const Key('lab-capture-enable-0')), findsOneWidget);
+      final checkbox = tester.widget<CheckboxListTile>(
+        find.byKey(const Key('lab-capture-check-0')),
+      );
+      expect(checkbox.onChanged, isNotNull);
 
       await tester.enterText(
         find.byKey(const Key('lab-capture-value-0')),
         '185',
       );
-      await tester.tap(find.byKey(const Key('lab-capture-enable-0')));
+      await tester.tap(find.byKey(const Key('lab-capture-check-0')));
       await tester.pumpAndSettle();
 
       expect(settings.managementType, originalProfile);
@@ -448,7 +450,7 @@ void main() {
           .single;
 
       await _pumpReview(tester, labService, settings, [candidate]);
-      await tester.tap(find.byKey(const Key('lab-capture-enable-0')));
+      await tester.tap(find.byKey(const Key('lab-capture-check-0')));
       await tester.pumpAndSettle();
 
       expect(settings.managementType, profile);
@@ -458,6 +460,92 @@ void main() {
     });
   }
 
+  testWidgets('unmapped exact alias auto-links and enables on checkbox tap', (
+    tester,
+  ) async {
+    final labService = await _labService();
+    final settings = await _profileSettings(LabManagementType.custom);
+    final candidate = _unmappedCandidate('Total Protein(E)', 8, unit: 'g/dL');
+
+    await _pumpReview(tester, labService, settings, [candidate]);
+    expect(candidate.definition, isNull);
+    expect(
+      tester
+          .widget<CheckboxListTile>(
+            find.byKey(const Key('lab-capture-check-manual')),
+          )
+          .onChanged,
+      isNotNull,
+    );
+
+    await tester.tap(find.byKey(const Key('lab-capture-check-manual')));
+    await tester.pumpAndSettle();
+
+    expect(candidate.definition?.id, 'total_protein');
+    expect(settings.enabledLabTestIds, contains('total_protein'));
+    expect(candidate.isSelected, isTrue);
+    expect(candidate.value, 8);
+    expect(candidate.saveUnit, 'g/dL');
+    expect(labService.results, isEmpty);
+  });
+
+  testWidgets('ambiguous OCR label requires explicit candidate selection', (
+    tester,
+  ) async {
+    final labService = await _labService();
+    final settings = await _profileSettings(LabManagementType.custom);
+    final candidate = _unmappedCandidate('Cholesterol', 180);
+
+    await _pumpReview(tester, labService, settings, [candidate]);
+    await tester.tap(find.byKey(const Key('lab-capture-check-manual')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('검사 항목을 선택해 주세요'), findsOneWidget);
+    expect(candidate.definition, isNull);
+    expect(settings.enabledLabTestIds, isEmpty);
+
+    await tester.tap(
+      find.byKey(const Key('lab-capture-match-total_cholesterol')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(candidate.definition?.id, 'total_cholesterol');
+    expect(settings.enabledLabTestIds, contains('total_cholesterol'));
+    expect(candidate.isSelected, isTrue);
+  });
+
+  testWidgets('unknown OCR label opens prefilled filtered search', (
+    tester,
+  ) async {
+    final labService = await _labService();
+    final settings = await _profileSettings(LabManagementType.custom);
+    final candidate = _unmappedCandidate('Unknown Marker', 9);
+
+    await _pumpReview(tester, labService, settings, [candidate]);
+    await tester.tap(find.byKey(const Key('lab-capture-check-manual')));
+    await tester.pumpAndSettle();
+
+    final search = tester.widget<TextField>(
+      find.byKey(const Key('lab-capture-definition-search')),
+    );
+    expect(search.controller!.text, 'Unknown Marker');
+    expect(candidate.definition, isNull);
+
+    await tester.enterText(
+      find.byKey(const Key('lab-capture-definition-search')),
+      'Creatinine',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('lab-capture-search-creatinine')));
+    await tester.pumpAndSettle();
+
+    expect(candidate.definition?.id, 'creatinine');
+    expect(settings.enabledLabTestIds, contains('creatinine'));
+    expect(candidate.isSelected, isTrue);
+    expect(candidate.value, 9);
+    expect(labService.results, isEmpty);
+  });
+
   testWidgets('multiple disabled candidates are enabled independently', (
     tester,
   ) async {
@@ -466,24 +554,17 @@ void main() {
     final candidates = _mappedCandidates([
       _parsed('Creatinine', 1.1),
       _parsed('Albumin', 4.2),
-      _parsed('Unknown Marker', 9),
     ]);
 
     await _pumpReview(tester, labService, settings, candidates);
-    expect(find.byKey(const Key('lab-capture-enable-0')), findsOneWidget);
-    expect(find.byKey(const Key('lab-capture-enable-1')), findsOneWidget);
-    expect(find.byKey(const Key('lab-capture-enable-2')), findsNothing);
-
-    await tester.tap(find.byKey(const Key('lab-capture-enable-0')));
+    await tester.tap(find.byKey(const Key('lab-capture-check-0')));
     await tester.pumpAndSettle();
 
     expect(settings.enabledLabTestIds, contains('creatinine'));
     expect(settings.enabledLabTestIds, isNot(contains('albumin')));
     expect(candidates[1].value, 4.2);
-    expect(find.byKey(const Key('lab-capture-enable-1')), findsOneWidget);
-    expect(candidates, hasLength(3));
-    expect(candidates[2].rawTestName, 'Unknown Marker');
-    expect(candidates[2].isMapped, isFalse);
+    expect(candidates, hasLength(2));
+    expect(candidates[1].isSelected, isFalse);
     expect(labService.results, isEmpty);
   });
 
@@ -570,6 +651,21 @@ ParsedLabCaptureCandidate _parsed(String name, double value) {
     value: value,
     unit: 'mg/dL',
     sourceImageIndex: 0,
+  );
+}
+
+LabCaptureCandidate _unmappedCandidate(
+  String name,
+  double value, {
+  String? unit = 'mg/dL',
+}) {
+  return LabCaptureCandidate(
+    id: 'manual',
+    rawTestName: name,
+    value: value,
+    ocrUnit: unit,
+    sourceImageIndices: const [0],
+    mappingStatus: LabCaptureMappingStatus.unmapped,
   );
 }
 

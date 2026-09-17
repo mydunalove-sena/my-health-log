@@ -102,8 +102,8 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
                   definitions: widget.labTestSettingsService.allDefinitions,
                   valueController: _valueControllers[candidate.id]!,
                   isEnabled: _isCandidateEnabled(candidate),
-                  isEnabling: _enablingCandidateIds.contains(candidate.id),
-                  onEnable: () => _enableCandidate(candidate),
+                  isResolving: _enablingCandidateIds.contains(candidate.id),
+                  onSelect: () => _selectCandidate(candidate),
                   onChanged: () => setState(_refreshExistingRows),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -175,12 +175,25 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
         widget.labTestSettingsService.enabledLabTestIds.contains(definition.id);
   }
 
-  Future<void> _enableCandidate(LabCaptureCandidate candidate) async {
-    final definition = candidate.definition;
-    if (definition == null || _enablingCandidateIds.contains(candidate.id)) {
-      return;
-    }
+  Future<void> _selectCandidate(LabCaptureCandidate candidate) async {
+    if (_enablingCandidateIds.contains(candidate.id)) return;
     _syncEditedValues();
+    var definition = candidate.definition;
+    if (definition == null) {
+      final mapping = LabCaptureMappingService(
+        widget.labTestSettingsService.allDefinitions,
+      );
+      final matches = mapping.matchingDefinitions(candidate.rawTestName);
+      if (matches.length == 1) {
+        definition = matches.single;
+      } else if (matches.length > 1) {
+        definition = await _chooseDefinition(matches);
+      } else {
+        definition = await _searchDefinition(candidate.rawTestName);
+      }
+      if (definition == null || !mounted) return;
+      candidate.mapTo(definition);
+    }
     setState(() => _enablingCandidateIds.add(candidate.id));
     try {
       await widget.labTestSettingsService.enableLabTest(definition.id);
@@ -196,6 +209,35 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
         setState(() => _enablingCandidateIds.remove(candidate.id));
       }
     }
+  }
+
+  Future<LabTestDefinition?> _chooseDefinition(
+    List<LabTestDefinition> definitions,
+  ) {
+    return showDialog<LabTestDefinition>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('검사 항목을 선택해 주세요'),
+        children: [
+          for (final definition in definitions)
+            SimpleDialogOption(
+              key: Key('lab-capture-match-${definition.id}'),
+              onPressed: () => Navigator.of(context).pop(definition),
+              child: Text(definition.displayName),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<LabTestDefinition?> _searchDefinition(String initialQuery) async {
+    return showDialog<LabTestDefinition>(
+      context: context,
+      builder: (context) => _LabDefinitionSearchDialog(
+        initialQuery: initialQuery,
+        definitions: widget.labTestSettingsService.allDefinitions,
+      ),
+    );
   }
 
   Future<void> _addPhotos() async {
@@ -431,8 +473,8 @@ class _CandidateTile extends StatelessWidget {
     required this.definitions,
     required this.valueController,
     required this.isEnabled,
-    required this.isEnabling,
-    required this.onEnable,
+    required this.isResolving,
+    required this.onSelect,
     required this.onChanged,
   });
 
@@ -440,8 +482,8 @@ class _CandidateTile extends StatelessWidget {
   final List<LabTestDefinition> definitions;
   final TextEditingController valueController;
   final bool isEnabled;
-  final bool isEnabling;
-  final VoidCallback onEnable;
+  final bool isResolving;
+  final VoidCallback onSelect;
   final VoidCallback onChanged;
 
   @override
@@ -464,11 +506,15 @@ class _CandidateTile extends StatelessWidget {
               key: ValueKey('lab-capture-check-${candidate.id}'),
               value: candidate.isSelected,
               contentPadding: EdgeInsets.zero,
-              onChanged: !candidate.isMapped || !isEnabled
+              onChanged: isResolving
                   ? null
                   : (value) {
-                      candidate.isSelected = value ?? false;
-                      onChanged();
+                      if (value == true) {
+                        onSelect();
+                      } else {
+                        candidate.isSelected = false;
+                        onChanged();
+                      }
                     },
               title: Text(candidate.displayName),
               subtitle: Text(candidate.rawTestName),
@@ -507,18 +553,6 @@ class _CandidateTile extends StatelessWidget {
             const _Notice(text: '검사 항목 선택 필요', color: AppColors.error),
           if (candidate.isMapped && !isEnabled) ...[
             const _Notice(text: '현재 검사 목록에 없는 항목입니다.', color: AppColors.error),
-            const SizedBox(height: AppSpacing.xs),
-            OutlinedButton.icon(
-              key: ValueKey('lab-capture-enable-${candidate.id}'),
-              onPressed: isEnabling ? null : onEnable,
-              icon: isEnabling
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.playlist_add),
-              label: const Text('검사 목록에 추가'),
-            ),
           ],
           if (candidate.hasImportConflict)
             const _Notice(
@@ -540,6 +574,91 @@ class _CandidateTile extends StatelessWidget {
             const _Notice(text: '인식 단위와 설정 단위가 다릅니다.', color: AppColors.error),
         ],
       ),
+    );
+  }
+}
+
+class _LabDefinitionSearchDialog extends StatefulWidget {
+  const _LabDefinitionSearchDialog({
+    required this.initialQuery,
+    required this.definitions,
+  });
+
+  final String initialQuery;
+  final List<LabTestDefinition> definitions;
+
+  @override
+  State<_LabDefinitionSearchDialog> createState() =>
+      _LabDefinitionSearchDialogState();
+}
+
+class _LabDefinitionSearchDialogState
+    extends State<_LabDefinitionSearchDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialQuery);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _controller.text.trim().toLowerCase();
+    final matches = query.isEmpty
+        ? const <LabTestDefinition>[]
+        : widget.definitions
+              .where(
+                (definition) =>
+                    definition.displayName.toLowerCase().contains(query),
+              )
+              .toList();
+    return AlertDialog(
+      title: const Text('검사 항목 검색'),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 320,
+        child: Column(
+          children: [
+            TextField(
+              key: const Key('lab-capture-definition-search'),
+              controller: _controller,
+              decoration: const InputDecoration(
+                labelText: '검사명',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Expanded(
+              child: matches.isEmpty
+                  ? const Center(child: Text('일치하는 검사 항목이 없습니다.'))
+                  : ListView(
+                      children: [
+                        for (final definition in matches)
+                          ListTile(
+                            key: Key('lab-capture-search-${definition.id}'),
+                            title: Text(definition.displayName),
+                            onTap: () => Navigator.of(context).pop(definition),
+                          ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('취소'),
+        ),
+      ],
     );
   }
 }

@@ -20,6 +20,8 @@ void main() {
       'Creatinine(크레아티닌)': 'creatinine',
       'Uric Acid(요산)': 'uric_acid',
       'Total cholesterol(총콜레스테롤)': 'total_cholesterol',
+      'Total Protein(E)': 'total_protein',
+      'Total Protein(총 단백)': 'total_protein',
       'Alk. Phos(알칼리인산분해효소)': 'alp',
       'AST(GOT)(아스파르테이트아미노전이효소)': 'ast',
     };
@@ -35,8 +37,7 @@ void main() {
     expect(service.matchDefinition('Alk. Phos (알칼리')?.id, 'alp');
   });
 
-  test('leaves Total Protein and fuzzy-like unknown names unmapped', () {
-    expect(service.matchDefinition('Total Protein(총 단백)'), isNull);
+  test('leaves fuzzy-like unknown names unmapped', () {
     expect(service.matchDefinition('Creatin'), isNull);
     expect(service.matchDefinition('Inorganic Phosphorus'), isNull);
     expect(service.matchDefinition('Protein Albumin'), isNull);

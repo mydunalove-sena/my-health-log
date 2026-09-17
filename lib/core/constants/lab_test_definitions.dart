@@ -39,6 +39,11 @@ const predefinedLabTestDefinitions = <LabTestDefinition>[
     defaultUnit: 'mg/dL',
   ),
   LabTestDefinition(id: 'albumin', displayName: 'Albumin', defaultUnit: 'g/dL'),
+  LabTestDefinition(
+    id: 'total_protein',
+    displayName: 'Total Protein',
+    defaultUnit: 'g/dL',
+  ),
   LabTestDefinition(id: 'wbc', displayName: 'WBC', defaultUnit: '×10³/µL'),
   LabTestDefinition(
     id: 'hemoglobin',
