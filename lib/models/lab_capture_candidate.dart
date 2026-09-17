@@ -106,6 +106,7 @@ class LabCaptureCandidate {
   String? get saveUnit => definition?.defaultUnit ?? _emptyToNull(ocrUnit);
 
   bool get isMapped => mappingStatus == LabCaptureMappingStatus.mapped;
+  bool get hasRecognizedTestName => rawTestName.trim().isNotEmpty;
   bool get hasExistingSameValue {
     final existing = existingResult;
     if (existing == null) return false;
