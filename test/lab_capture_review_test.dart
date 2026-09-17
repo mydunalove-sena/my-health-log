@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_health_log/core/constants/lab_test_definitions.dart';
 import 'package:my_health_log/models/lab_capture_candidate.dart';
 import 'package:my_health_log/models/lab_result.dart';
+import 'package:my_health_log/models/lab_test_definition.dart';
 import 'package:my_health_log/screens/lab/lab_capture_review_screen.dart';
 import 'package:my_health_log/screens/lab/lab_screen.dart';
 import 'package:my_health_log/services/lab_capture_mapping_service.dart';
@@ -10,8 +11,13 @@ import 'package:my_health_log/services/lab_image_picker_service.dart';
 import 'package:my_health_log/services/lab_ocr_service.dart';
 import 'package:my_health_log/services/lab_result_service.dart';
 import 'package:my_health_log/services/lab_test_settings_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   testWidgets('opening review does not save until explicit confirmation', (
     tester,
   ) async {
@@ -372,6 +378,115 @@ void main() {
     },
   );
 
+  testWidgets('mapped enabled candidate remains ready for import', (
+    tester,
+  ) async {
+    final labService = await _labService();
+    final settings = await _profileSettings(LabManagementType.kidneyTransplant);
+    final candidate = _mappedCandidates([_parsed('Creatinine', 1.21)]).single;
+
+    await _pumpReview(tester, labService, settings, [candidate]);
+
+    expect(candidate.isSelected, isTrue);
+    expect(find.text('현재 검사 목록에 없는 항목입니다.'), findsNothing);
+    expect(find.byKey(const Key('lab-capture-enable-0')), findsNothing);
+  });
+
+  testWidgets(
+    'mapped disabled candidate can be enabled without leaving review or saving result',
+    (tester) async {
+      final labService = await _labService();
+      final settings = await _persistentProfileSettings(
+        LabManagementType.kidneyTransplant,
+      );
+      final originalProfile = settings.managementType;
+      final candidate = _mappedCandidates([_parsed('Total Cholesterol', 184)])
+          .single;
+
+      await _pumpReview(tester, labService, settings, [candidate]);
+      expect(candidate.isSelected, isFalse);
+      expect(find.text('현재 검사 목록에 없는 항목입니다.'), findsOneWidget);
+      expect(find.text('Total Cholesterol'), findsWidgets);
+      expect(find.byKey(const Key('lab-capture-enable-0')), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const Key('lab-capture-value-0')),
+        '185',
+      );
+      await tester.tap(find.byKey(const Key('lab-capture-enable-0')));
+      await tester.pumpAndSettle();
+
+      expect(settings.managementType, originalProfile);
+      expect(settings.enabledLabTestIds, contains('total_cholesterol'));
+      expect(candidate.value, 185);
+      expect(candidate.isSelected, isTrue);
+      expect(find.byType(LabCaptureReviewScreen), findsOneWidget);
+      expect(find.text('현재 검사 목록에 없는 항목입니다.'), findsNothing);
+      expect(labService.results, isEmpty);
+
+      final reloaded = LabTestSettingsService();
+      await reloaded.load();
+      expect(reloaded.managementType, originalProfile);
+      expect(reloaded.enabledLabTestIds, contains('total_cholesterol'));
+
+      await _tapSave(tester);
+      await tester.pumpAndSettle();
+      expect(labService.results.single.value, 185);
+    },
+  );
+
+  for (final profile in [
+    LabManagementType.kidneyTransplant,
+    LabManagementType.dialysis,
+  ]) {
+    testWidgets('enable action is profile-independent for ${profile.id}', (
+      tester,
+    ) async {
+      final labService = await _labService();
+      final settings = await _profileSettings(profile);
+      final candidate = _mappedCandidates([_parsed('Total Cholesterol', 180)])
+          .single;
+
+      await _pumpReview(tester, labService, settings, [candidate]);
+      await tester.tap(find.byKey(const Key('lab-capture-enable-0')));
+      await tester.pumpAndSettle();
+
+      expect(settings.managementType, profile);
+      expect(settings.enabledLabTestIds, contains('total_cholesterol'));
+      expect(candidate.isSelected, isTrue);
+      expect(labService.results, isEmpty);
+    });
+  }
+
+  testWidgets('multiple disabled candidates are enabled independently', (
+    tester,
+  ) async {
+    final labService = await _labService();
+    final settings = await _profileSettings(LabManagementType.custom);
+    final candidates = _mappedCandidates([
+      _parsed('Creatinine', 1.1),
+      _parsed('Albumin', 4.2),
+      _parsed('Unknown Marker', 9),
+    ]);
+
+    await _pumpReview(tester, labService, settings, candidates);
+    expect(find.byKey(const Key('lab-capture-enable-0')), findsOneWidget);
+    expect(find.byKey(const Key('lab-capture-enable-1')), findsOneWidget);
+    expect(find.byKey(const Key('lab-capture-enable-2')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('lab-capture-enable-0')));
+    await tester.pumpAndSettle();
+
+    expect(settings.enabledLabTestIds, contains('creatinine'));
+    expect(settings.enabledLabTestIds, isNot(contains('albumin')));
+    expect(candidates[1].value, 4.2);
+    expect(find.byKey(const Key('lab-capture-enable-1')), findsOneWidget);
+    expect(candidates, hasLength(3));
+    expect(candidates[2].rawTestName, 'Unknown Marker');
+    expect(candidates[2].isMapped, isFalse);
+    expect(labService.results, isEmpty);
+  });
+
   testWidgets(
     'added conflicting result is visible and never silently overwrites',
     (tester) async {
@@ -467,6 +582,27 @@ Future<LabResultService> _labService({List<LabResult>? results}) async {
 Future<LabTestSettingsService> _settings() async {
   final service = LabTestSettingsService.inMemory();
   await service.load();
+  await service.setEnabledLabTestIds([
+    for (final definition in predefinedLabTestDefinitions) definition.id,
+  ]);
+  return service;
+}
+
+Future<LabTestSettingsService> _profileSettings(
+  LabManagementType profile,
+) async {
+  final service = LabTestSettingsService.inMemory();
+  await service.load();
+  await service.setManagementType(profile);
+  return service;
+}
+
+Future<LabTestSettingsService> _persistentProfileSettings(
+  LabManagementType profile,
+) async {
+  final service = LabTestSettingsService();
+  await service.load();
+  await service.setManagementType(profile);
   return service;
 }
 

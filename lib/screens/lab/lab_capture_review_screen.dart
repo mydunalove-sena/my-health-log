@@ -44,6 +44,7 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
   bool _isSaving = false;
   bool _isAddingPhotos = false;
   int _addedBatchCount = 0;
+  final Set<String> _enablingCandidateIds = {};
 
   @override
   void initState() {
@@ -58,6 +59,9 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
       _valueControllers[candidate.id] = TextEditingController(
         text: formatLabCaptureValue(candidate.value),
       );
+      if (!_isCandidateEnabled(candidate)) {
+        candidate.isSelected = false;
+      }
     }
     _refreshExistingRows();
   }
@@ -97,6 +101,9 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
                   candidate: candidate,
                   definitions: widget.labTestSettingsService.allDefinitions,
                   valueController: _valueControllers[candidate.id]!,
+                  isEnabled: _isCandidateEnabled(candidate),
+                  isEnabling: _enablingCandidateIds.contains(candidate.id),
+                  onEnable: () => _enableCandidate(candidate),
                   onChanged: () => setState(_refreshExistingRows),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -160,6 +167,35 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
         ),
       ),
     );
+  }
+
+  bool _isCandidateEnabled(LabCaptureCandidate candidate) {
+    final definition = candidate.definition;
+    return definition != null &&
+        widget.labTestSettingsService.enabledLabTestIds.contains(definition.id);
+  }
+
+  Future<void> _enableCandidate(LabCaptureCandidate candidate) async {
+    final definition = candidate.definition;
+    if (definition == null || _enablingCandidateIds.contains(candidate.id)) {
+      return;
+    }
+    _syncEditedValues();
+    setState(() => _enablingCandidateIds.add(candidate.id));
+    try {
+      await widget.labTestSettingsService.enableLabTest(definition.id);
+      if (!mounted) return;
+      setState(() {
+        if (!candidate.hasImportConflict && !candidate.hasExistingSameValue) {
+          candidate.isSelected = true;
+        }
+        _refreshExistingRows();
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _enablingCandidateIds.remove(candidate.id));
+      }
+    }
   }
 
   Future<void> _addPhotos() async {
@@ -280,6 +316,13 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
         });
         return;
       }
+      if (!_isCandidateEnabled(candidate)) {
+        setState(() {
+          _formError = '${candidate.displayName} 검사를 먼저 검사 목록에 추가해 주세요.';
+          _isSaving = false;
+        });
+        return;
+      }
       if (candidate.hasImportConflict) {
         setState(() {
           _formError = '같은 검사 항목의 서로 다른 인식값을 먼저 확인해 주세요.';
@@ -361,6 +404,9 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
         candidate,
         existingResults,
       );
+      if (!_isCandidateEnabled(candidate)) {
+        candidate.isSelected = false;
+      }
       if (candidate.hasExistingSameValue) {
         candidate.isSelected = false;
       }
@@ -384,12 +430,18 @@ class _CandidateTile extends StatelessWidget {
     required this.candidate,
     required this.definitions,
     required this.valueController,
+    required this.isEnabled,
+    required this.isEnabling,
+    required this.onEnable,
     required this.onChanged,
   });
 
   final LabCaptureCandidate candidate;
   final List<LabTestDefinition> definitions;
   final TextEditingController valueController;
+  final bool isEnabled;
+  final bool isEnabling;
+  final VoidCallback onEnable;
   final VoidCallback onChanged;
 
   @override
@@ -412,10 +464,12 @@ class _CandidateTile extends StatelessWidget {
               key: ValueKey('lab-capture-check-${candidate.id}'),
               value: candidate.isSelected,
               contentPadding: EdgeInsets.zero,
-              onChanged: (value) {
-                candidate.isSelected = value ?? false;
-                onChanged();
-              },
+              onChanged: !candidate.isMapped || !isEnabled
+                  ? null
+                  : (value) {
+                      candidate.isSelected = value ?? false;
+                      onChanged();
+                    },
               title: Text(candidate.displayName),
               subtitle: Text(candidate.rawTestName),
             ),
@@ -451,6 +505,21 @@ class _CandidateTile extends StatelessWidget {
           ),
           if (!candidate.isMapped)
             const _Notice(text: '검사 항목 선택 필요', color: AppColors.error),
+          if (candidate.isMapped && !isEnabled) ...[
+            const _Notice(text: '현재 검사 목록에 없는 항목입니다.', color: AppColors.error),
+            const SizedBox(height: AppSpacing.xs),
+            OutlinedButton.icon(
+              key: ValueKey('lab-capture-enable-${candidate.id}'),
+              onPressed: isEnabling ? null : onEnable,
+              icon: isEnabling
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.playlist_add),
+              label: const Text('검사 목록에 추가'),
+            ),
+          ],
           if (candidate.hasImportConflict)
             const _Notice(
               text: '같은 검사 항목에서 서로 다른 값이 인식되었습니다.',

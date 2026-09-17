@@ -217,6 +217,36 @@ void main() {
     expect(reloaded.customDefinitions.single.id, custom.id);
   });
 
+  for (final profile in [
+    LabManagementType.kidneyTransplant,
+    LabManagementType.dialysis,
+    LabManagementType.liverTransplant,
+  ]) {
+    test(
+      'enableLabTest preserves ${profile.id} profile and persists',
+      () async {
+        final service = await _persistentService();
+        await service.setManagementType(profile);
+        expect(service.enabledLabTestIds, isNot(contains('ldl')));
+
+        await service.enableLabTest('ldl');
+        final reloaded = await _persistentService();
+
+        expect(reloaded.managementType, profile);
+        expect(reloaded.enabledLabTestIds, contains('ldl'));
+      },
+    );
+  }
+
+  test('enableLabTest ignores unknown definition IDs', () async {
+    final service = await _persistentService();
+    final before = service.enabledLabTestIds;
+
+    await service.enableLabTest('future-unknown-test');
+
+    expect(service.enabledLabTestIds, before);
+  });
+
   test('user enabled list is not overwritten by preset on reload', () async {
     final service = await _persistentService();
 

@@ -220,6 +220,15 @@ class LabTestSettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> enableLabTest(String id) async {
+    if (_enabledLabTestIds.contains(id)) return;
+    final next = _validUniqueIds([..._enabledLabTestIds, id]);
+    if (!next.contains(id)) return;
+    _enabledLabTestIds = next;
+    await _persistEnabledIds();
+    notifyListeners();
+  }
+
   Future<LabTestDefinition> addCustomDefinition({
     required String displayName,
     String? defaultUnit,
