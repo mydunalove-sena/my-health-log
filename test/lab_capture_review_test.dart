@@ -18,6 +18,97 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  for (final target in ['tco2', 'custom-legacy-tco2']) {
+    testWidgets('legacy collision requires explicit dropdown choice: $target', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const legacy = LabTestDefinition(
+        id: 'custom-legacy-tco2',
+        displayName: 'tCO2(총산화탄소)',
+        defaultUnit: 'mmol/L',
+      );
+      final settings = LabTestSettingsService.inMemory();
+      await settings.applyBackup(
+        const LabTestSettingsBackup(
+          managementType: LabManagementType.dialysis,
+          enabledLabTestIds: ['urr'],
+          customDefinitions: [legacy],
+        ),
+      );
+      final old = _result(
+        'legacy-row',
+        _today(),
+        legacy.displayName,
+        5,
+      ).copyWith(unit: 'mmol/L');
+      final labService = await _labService(results: [old]);
+      final candidate = LabCaptureMappingService(settings.allDefinitions).map([
+        const ParsedLabCaptureCandidate(
+          rawTestName: 'tCO2(총이산화탄소)',
+          value: 5,
+          unit: 'mmol/L',
+          sourceImageIndex: 0,
+        ),
+      ]).single;
+      expect(candidate.definition, isNull);
+      await _pumpReview(tester, labService, settings, [candidate]);
+      final field = find.byKey(const Key('lab-capture-map-0'));
+      final dropdown = tester.widget<DropdownButton<LabTestDefinition>>(
+        find.descendant(
+          of: field,
+          matching: find.byType(DropdownButton<LabTestDefinition>),
+        ),
+      );
+      expect(dropdown.items!.map((i) => i.value), settings.allDefinitions);
+      final definition = settings.allDefinitions.singleWhere(
+        (d) => d.id == target,
+      );
+      final label = target.startsWith('custom-')
+          ? '${definition.displayName} · 사용자 추가'
+          : definition.displayName;
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text(label),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await Scrollable.ensureVisible(
+        tester.element(find.text(label).last),
+        alignment: 0.5,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label).last);
+      await tester.pumpAndSettle();
+      expect(candidate.definition, same(definition));
+      expect(candidate.mappingStatus, LabCaptureMappingStatus.mapped);
+      expect(candidate.rawTestName, 'tCO2(총이산화탄소)');
+      expect(candidate.ocrUnit, 'mmol/L');
+      expect(candidate.saveUnit, 'mmol/L');
+      expect(candidate.value, 5);
+      expect(settings.enabledLabTestIds, contains(target));
+      expect(settings.managementType, LabManagementType.dialysis);
+      expect(settings.customDefinitions.single, same(legacy));
+      if (target == legacy.id) {
+        expect(candidate.existingResult, same(old));
+        expect(candidate.hasExistingSameValue, isTrue);
+        expect(candidate.isSelected, isFalse);
+        await _tapSave(tester);
+        await tester.pumpAndSettle();
+      } else {
+        // A different name/ID is not silently migrated or merged.
+        expect(candidate.existingResult, isNull);
+        expect(candidate.isSelected, isTrue);
+      }
+      expect(labService.results, [old]);
+      expect(find.byType(AlertDialog), findsNothing);
+    });
+  }
+
   for (final target in ['alp', 'custom']) {
     testWidgets('manual fallback lists all definitions and enables $target', (
       tester,
@@ -57,14 +148,17 @@ void main() {
       final definition = target == 'custom'
           ? custom
           : settings.allDefinitions.singleWhere((item) => item.id == target);
+      final itemLabel = target == 'custom'
+          ? '${definition.displayName} · 사용자 추가'
+          : definition.displayName;
       await tester.tap(field);
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
-        find.text(definition.displayName),
+        find.text(itemLabel),
         200,
         scrollable: find.byType(Scrollable).last,
       );
-      await tester.tap(find.text(definition.displayName).last);
+      await tester.tap(find.text(itemLabel).last);
       await tester.pumpAndSettle();
       expect(candidate.definition?.id, definition.id);
       expect(candidate.mappingStatus, LabCaptureMappingStatus.mapped);
@@ -715,7 +809,19 @@ void main() {
     (tester) async {
       final labService = await _labService();
       final settings = await _settings();
-      await settings.addCustomDefinition(displayName: 'HDL-Cholesterol');
+      // An older backup may contain a collision that new creation now blocks.
+      await settings.applyBackup(
+        LabTestSettingsBackup(
+          managementType: settings.managementType,
+          enabledLabTestIds: settings.enabledLabTestIds,
+          customDefinitions: const [
+            LabTestDefinition(
+              id: 'custom-legacy-hdl',
+              displayName: 'HDL-Cholesterol',
+            ),
+          ],
+        ),
+      );
       final enabledBefore = settings.enabledLabTestIds;
       final candidates = LabCaptureMappingService(settings.allDefinitions)
           .map([_parsed('HDL-Cholesterol(한글)', 65), _parsed('BUN', 19.4)]);

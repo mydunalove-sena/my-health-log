@@ -8,6 +8,11 @@ class LabCaptureMappingService {
   final List<LabTestDefinition> definitions;
 
   static const explicitAliases = <String, String>{
+    // Approved hospital base labels; trailing Hangul uses the shared resolver.
+    'wbc count': 'wbc',
+    'plt count': 'platelet',
+    't. bilirubin': 'total_bilirubin',
+    'tacrolimus(fk-506)': 'tacrolimus',
     'calcium(칼슘)': 'calcium',
     'p(인)': 'phosphorus',
     'inorganic p(인)': 'phosphorus',
@@ -98,13 +103,7 @@ class LabCaptureMappingService {
     List<LabResult> existingResults,
   ) {
     if (!candidate.isMapped) return null;
-    final key = _candidateKeyForCandidate(candidate);
-    for (final result in existingResults) {
-      if (_canonicalKeyForName(result.testName) == key) {
-        return result;
-      }
-    }
-    return null;
+    return _existingFor(candidate.definition, existingResults);
   }
 
   LabTestDefinition? _matchDefinition(String ocrName) {
@@ -136,7 +135,12 @@ class LabCaptureMappingService {
     if (definition == null) return null;
     final key = _canonicalKeyForDefinition(definition);
     for (final result in existingResults) {
-      if (_canonicalKeyForName(result.testName) == key) {
+      // An explicitly selected custom identity still owns its exact stored
+      // name when a newly added predefined makes automatic resolution ambiguous.
+      // Do not merge different legacy names or choose between colliding IDs.
+      if (_normalizeName(result.testName) ==
+              _normalizeName(definition.displayName) ||
+          _canonicalKeyForName(result.testName) == key) {
         return result;
       }
     }

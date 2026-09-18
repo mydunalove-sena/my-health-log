@@ -218,7 +218,13 @@ void main() {
     expect(custom.defaultUnit, 'mg/L');
     expect(settings.enabledLabTestIds, contains(custom.id));
     expect(find.text('CRP'), findsOneWidget);
-    expect(find.text('mg/L'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(Key('lab-definition-checkbox-${custom.id}')),
+        matching: find.text('mg/L'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await _pumpSettings(tester, settings);

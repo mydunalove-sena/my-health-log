@@ -514,12 +514,18 @@ class _CandidateTile extends StatelessWidget {
           DropdownButtonFormField<LabTestDefinition>(
             key: ValueKey('lab-capture-map-${candidate.id}'),
             initialValue: candidate.definition,
+            isExpanded: true,
             decoration: const InputDecoration(labelText: '검사 항목'),
             items: [
               for (final definition in definitions)
                 DropdownMenuItem(
                   value: definition,
-                  child: Text(definition.displayName),
+                  child: Text(
+                    definition.id.startsWith('custom-')
+                        ? '${definition.displayName} · 사용자 추가'
+                        : definition.displayName,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
             ],
             onChanged: isResolving ? null : onSelect,

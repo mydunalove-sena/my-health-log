@@ -105,6 +105,25 @@ const predefinedLabTestDefinitions = <LabTestDefinition>[
   LabTestDefinition(id: 'pth', displayName: 'Intact PTH', defaultUnit: 'pg/mL'),
   LabTestDefinition(id: 'ktv', displayName: 'Kt/V'),
   LabTestDefinition(id: 'urr', displayName: 'URR', defaultUnit: '%'),
+  // Hospital screenshot ground truth; append without changing existing IDs,
+  // display names, order or profile presets (stored results use name identity).
+  LabTestDefinition(
+    id: 'rbc',
+    displayName: 'RBC COUNT',
+    defaultUnit: '10^6/µL',
+  ),
+  LabTestDefinition(id: 'hematocrit', displayName: 'Hct', defaultUnit: '%'),
+  LabTestDefinition(
+    id: 'neutrophil_absolute',
+    displayName: 'Neutrophil(#)',
+    defaultUnit: '10^3/µL',
+  ),
+  LabTestDefinition(id: 'tco2', displayName: 'tCO2', defaultUnit: 'mmol/L'),
+  LabTestDefinition(
+    id: 'cystatin_c',
+    displayName: 'Cystatin C',
+    defaultUnit: 'mg/L',
+  ),
 ];
 
 const defaultLabTestIdsByManagementType = <LabManagementType, List<String>>{

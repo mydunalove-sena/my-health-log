@@ -496,6 +496,32 @@ void main() {
       );
     });
 
+    test(
+      'version 6 backup accepts legacy custom now sharing a predefined name',
+      () {
+        final service = BackupService(repository: InMemoryBackupRepository());
+        expect(
+          () => service.validateBackup(
+            _version6BackupJson(
+              labSettings: {
+                'managementType': 'custom',
+                'enabledLabTestIds': ['custom-old-tco2'],
+                'customDefinitions': [
+                  {
+                    'id': 'custom-old-tco2',
+                    'displayName': 'tCO2',
+                    'defaultUnit': 'mmol/L',
+                  },
+                ],
+              },
+            ),
+          ),
+          returnsNormally,
+        );
+        expect(BackupDocument.backupVersion, 6);
+      },
+    );
+
     test('rejects invalid backup files', () {
       final service = BackupService(repository: InMemoryBackupRepository());
 

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/constants/lab_test_definitions.dart';
 import '../models/lab_test_definition.dart';
+import 'lab_capture_mapping_service.dart';
 
 class EmptyCustomLabTestNameException implements Exception {
   const EmptyCustomLabTestNameException();
@@ -113,10 +114,9 @@ class LabTestSettingsBackup {
         throw const FormatException('Invalid custom lab definitions.');
       }
       final normalizedName = definition.displayName.trim().toLowerCase();
-      final predefinedNameExists = predefinedLabTestDefinitions.any(
-        (item) => item.displayName.trim().toLowerCase() == normalizedName,
-      );
-      if (predefinedNameExists || !seenCustomNames.add(normalizedName)) {
+      // A later app version may introduce a predefined with this legacy name.
+      // Preserve the custom ID on restore; only new creation rejects collisions.
+      if (!seenCustomNames.add(normalizedName)) {
         throw const FormatException('Invalid custom lab definitions.');
       }
       validIds.add(definition.id);
@@ -237,7 +237,7 @@ class LabTestSettingsService extends ChangeNotifier {
     if (trimmedName.isEmpty) {
       throw const EmptyCustomLabTestNameException();
     }
-    if (_hasDuplicateDisplayName(trimmedName)) {
+    if (_hasDuplicateDefinition(trimmedName)) {
       throw const DuplicateLabTestDefinitionException();
     }
 
@@ -341,10 +341,13 @@ class LabTestSettingsService extends ChangeNotifier {
     return result;
   }
 
-  bool _hasDuplicateDisplayName(String displayName) {
-    final normalized = _normalizeName(displayName);
+  bool _hasDuplicateDefinition(String displayName) {
+    // Test each identity with the existing resolver so an ambiguous registry
+    // cannot let another duplicate through. No second normalizer/alias policy.
     return allDefinitions.any(
-      (definition) => _normalizeName(definition.displayName) == normalized,
+      (definition) =>
+          LabCaptureMappingService([definition]).matchDefinition(displayName) !=
+          null,
     );
   }
 
@@ -358,6 +361,4 @@ class LabTestSettingsService extends ChangeNotifier {
     }
     return id;
   }
-
-  String _normalizeName(String value) => value.trim().toLowerCase();
 }
