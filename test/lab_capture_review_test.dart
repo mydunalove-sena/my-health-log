@@ -18,6 +18,206 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  for (final target in ['alp', 'custom']) {
+    testWidgets('manual fallback lists all definitions and enables $target', (
+      tester,
+    ) async {
+      final labService = await _labService();
+      final settings = await _persistentProfileSettings(
+        LabManagementType.dialysis,
+      );
+      final custom = await settings.addCustomDefinition(
+        displayName: 'Synthetic Marker',
+        defaultUnit: 'IU/L',
+      );
+      await settings.setEnabledLabTestIds(['bun']);
+      final profile = settings.managementType;
+      final candidate = _unmappedCandidate(
+        'Unrecognized OCR Label',
+        50,
+        unit: 'IU/L',
+      );
+      expect(
+        LabCaptureMappingService(settings.allDefinitions)
+            .matchDefinition(candidate.rawTestName),
+        isNull,
+      );
+      await _pumpReview(tester, labService, settings, [candidate]);
+      final field = find.byKey(const Key('lab-capture-map-manual'));
+      final dropdown = tester.widget<DropdownButton<LabTestDefinition>>(
+        find.descendant(
+          of: field,
+          matching: find.byType(DropdownButton<LabTestDefinition>),
+        ),
+      );
+      expect(
+        dropdown.items!.map((item) => item.value!.id),
+        settings.allDefinitions.map((item) => item.id),
+      );
+      final definition = target == 'custom'
+          ? custom
+          : settings.allDefinitions.singleWhere((item) => item.id == target);
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text(definition.displayName),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.text(definition.displayName).last);
+      await tester.pumpAndSettle();
+      expect(candidate.definition?.id, definition.id);
+      expect(candidate.mappingStatus, LabCaptureMappingStatus.mapped);
+      expect(candidate.isSelected, isTrue);
+      expect(settings.enabledLabTestIds, contains(definition.id));
+      expect(settings.managementType, profile);
+      expect(candidate.rawTestName, 'Unrecognized OCR Label');
+      expect(candidate.value, 50);
+      expect(candidate.ocrUnit, 'IU/L');
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(SimpleDialog), findsNothing);
+      expect(labService.results, isEmpty);
+      final reloaded = LabTestSettingsService();
+      await reloaded.load();
+      expect(reloaded.enabledLabTestIds, contains(definition.id));
+      expect(reloaded.managementType, profile);
+    });
+  }
+
+  testWidgets(
+    'explicit remapping preserves edits and does not update the old identity',
+    (tester) async {
+      final labService = await _labService(
+        results: [_result('old', _today(), 'BUN', 50)],
+      );
+      final settings = await _settings();
+      await settings.excludeLabTest('alp');
+      final candidate = _mappedCandidates([_parsed('BUN', 50)]).single;
+      await _pumpReview(tester, labService, settings, [candidate]);
+      expect(candidate.hasExistingSameValue, isTrue);
+      await tester.enterText(
+        find.byKey(const Key('lab-capture-value-0')),
+        '51',
+      );
+      await tester.tap(find.byKey(const Key('lab-capture-map-0')));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('ALP'),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.text('ALP').last);
+      await tester.pumpAndSettle();
+      expect(candidate.definition?.id, 'alp');
+      expect(candidate.existingResult, isNull);
+      expect(candidate.rawTestName, 'BUN');
+      expect(candidate.ocrUnit, 'mg/dL');
+      expect(candidate.value, 51);
+      expect(candidate.isSelected, isTrue);
+      expect(settings.enabledLabTestIds, contains('alp'));
+      await _tapSave(tester);
+      await tester.pumpAndSettle();
+      expect(labService.results, hasLength(2));
+      expect(
+        labService.results.singleWhere((item) => item.id == 'old').value,
+        50,
+      );
+      expect(
+        labService.results.singleWhere((item) => item.testName == 'ALP').value,
+        51,
+      );
+    },
+  );
+
+  testWidgets(
+    'unmapped custom fallback reuses validation and persists confirmed fields',
+    (tester) async {
+      final labService = await _labService();
+      final settings = await _persistentProfileSettings(
+        LabManagementType.dialysis,
+      );
+      final profile = settings.managementType;
+      final candidate = _unmappedCandidate(
+        'OCR Proposed Label',
+        2.5,
+        unit: 'mg/L',
+      );
+      await _pumpReview(tester, labService, settings, [candidate]);
+      await tester.tap(find.byKey(const Key('lab-capture-add-custom-manual')));
+      await tester.pumpAndSettle();
+      final nameField = find.byKey(const Key('lab-custom-name-field'));
+      final unitField = find.byKey(const Key('lab-custom-unit-field'));
+      expect(
+        tester.widget<TextField>(nameField).controller!.text,
+        'OCR Proposed Label',
+      );
+      expect(tester.widget<TextField>(unitField).controller!.text, 'mg/L');
+      expect(settings.customDefinitions, isEmpty);
+      await tester.enterText(nameField, ' ');
+      await tester.tap(find.byKey(const Key('lab-custom-save-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('검사 항목명을 입력해주세요.'), findsOneWidget);
+      await tester.enterText(nameField, ' BUN ');
+      await tester.tap(find.byKey(const Key('lab-custom-save-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('이미 등록된 검사 항목입니다.'), findsOneWidget);
+      expect(settings.customDefinitions, isEmpty);
+      await tester.enterText(nameField, 'Confirmed Marker');
+      await tester.enterText(unitField, 'g/L');
+      await tester.tap(find.byKey(const Key('lab-custom-save-button')));
+      await tester.pumpAndSettle();
+      final custom = settings.customDefinitions.single;
+      expect(custom.displayName, 'Confirmed Marker');
+      expect(custom.defaultUnit, 'g/L');
+      expect(settings.allDefinitions, contains(custom));
+      expect(settings.enabledLabTestIds, contains(custom.id));
+      expect(settings.managementType, profile);
+      expect(candidate.definition?.id, custom.id);
+      expect(candidate.isSelected, isTrue);
+      expect(candidate.value, 2.5);
+      expect(candidate.rawTestName, 'OCR Proposed Label');
+      expect(candidate.ocrUnit, 'mg/L');
+      expect(
+        find.byKey(const Key('lab-capture-add-custom-manual')),
+        findsNothing,
+      );
+      expect(
+        tester
+            .state<FormFieldState<LabTestDefinition>>(
+              find.byKey(const Key('lab-capture-map-manual')),
+            )
+            .value
+            ?.id,
+        custom.id,
+      );
+      expect(labService.results, isEmpty);
+      final reloaded = LabTestSettingsService();
+      await reloaded.load();
+      expect(reloaded.customDefinitions.single.id, custom.id);
+      expect(reloaded.enabledLabTestIds, contains(custom.id));
+    },
+  );
+
+  testWidgets('custom dialog cancel changes neither definitions nor results', (
+    tester,
+  ) async {
+    final labService = await _labService();
+    final settings = await _settings();
+    final before = settings.enabledLabTestIds;
+    final candidate = _unmappedCandidate('Unknown', 50);
+    await _pumpReview(tester, labService, settings, [candidate]);
+    await tester.tap(find.byKey(const Key('lab-capture-add-custom-manual')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(of: find.byType(AlertDialog), matching: find.text('취소')),
+    );
+    await tester.pumpAndSettle();
+    expect(settings.customDefinitions, isEmpty);
+    expect(settings.enabledLabTestIds, before);
+    expect(candidate.definition, isNull);
+    expect(labService.results, isEmpty);
+  });
+
   testWidgets('opening review does not save until explicit confirmation', (
     tester,
   ) async {

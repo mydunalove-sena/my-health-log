@@ -172,6 +172,7 @@ class LabScreen extends StatelessWidget {
   Future<void> _openInputChoice(
     BuildContext context, {
     DateTime? initialDate,
+    bool showSavedDetail = true,
   }) async {
     final choice = await showModalBottomSheet<_LabInputChoice>(
       context: context,
@@ -181,16 +182,19 @@ class LabScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Text('검사 항목 추가', style: Theme.of(context).textTheme.titleMedium),
               ListTile(
                 key: const Key('lab-direct-input-button'),
                 leading: const Icon(Icons.edit_outlined),
                 title: const Text('직접 입력'),
+                subtitle: const Text('검사명과 결과값을 직접 입력합니다.'),
                 onTap: () => Navigator.of(context).pop(_LabInputChoice.direct),
               ),
               ListTile(
                 key: const Key('lab-photo-input-button'),
                 leading: const Icon(Icons.photo_library_outlined),
                 title: const Text('사진으로 입력'),
+                subtitle: const Text('검사 결과 사진에서 값을 가져옵니다.'),
                 onTap: () => Navigator.of(context).pop(_LabInputChoice.photo),
               ),
             ],
@@ -201,9 +205,17 @@ class LabScreen extends StatelessWidget {
     if (!context.mounted || choice == null) return;
     switch (choice) {
       case _LabInputChoice.direct:
-        await _openForm(context, initialDate: initialDate);
+        await _openForm(
+          context,
+          initialDate: initialDate,
+          showSavedDetail: showSavedDetail,
+        );
       case _LabInputChoice.photo:
-        await _openPhotoCapture(context, initialDate: initialDate);
+        await _openPhotoCapture(
+          context,
+          initialDate: initialDate,
+          showSavedDetail: showSavedDetail,
+        );
     }
   }
 
@@ -227,7 +239,11 @@ class LabScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _openForm(BuildContext context, {DateTime? initialDate}) async {
+  Future<void> _openForm(
+    BuildContext context, {
+    DateTime? initialDate,
+    bool showSavedDetail = true,
+  }) async {
     final settingsService = labTestSettingsService;
     final fallbackSettingsService = settingsService == null
         ? LabTestSettingsService.inMemory()
@@ -248,13 +264,20 @@ class LabScreen extends StatelessWidget {
       ),
     );
     if (context.mounted && savedDate != null) {
-      await _openDetail(context, savedDate);
+      if (showSavedDetail) {
+        await _openDetail(context, savedDate);
+      } else if (initialDate != null &&
+          LabResult.formatDateKey(savedDate) !=
+              LabResult.formatDateKey(initialDate)) {
+        Navigator.of(context).pop();
+      }
     }
   }
 
   Future<void> _openPhotoCapture(
     BuildContext context, {
     DateTime? initialDate,
+    bool showSavedDetail = true,
   }) async {
     final settingsService = labTestSettingsService;
     final fallbackSettingsService = settingsService == null
@@ -274,72 +297,60 @@ class LabScreen extends StatelessWidget {
       barrierDismissible: false,
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
+    var candidates = <LabCaptureCandidate>[];
+    var reviewDate = initialDate;
     try {
       final documents = await _recognizeImages(imagePaths);
       final parsed = const SeveranceLabOcrParser().parse(documents);
-      final recognizedDate = _reviewDate(parsed.map((item) => item.date));
-      final candidates = LabCaptureMappingService(activeSettings.allDefinitions)
-          .map(
-            parsed,
-            date: initialDate ?? recognizedDate,
-            existingResults: service.resultsForDate(
-              initialDate ?? recognizedDate ?? DateTime.now(),
-            ),
-          );
-      if (!context.mounted) return;
-      Navigator.of(context).pop();
-      final savedDate = await Navigator.of(context).push<DateTime>(
-        MaterialPageRoute(
-          builder: (_) => LabCaptureReviewScreen(
-            labResultService: service,
-            labTestSettingsService: activeSettings,
-            candidates: candidates,
-            initialDate: initialDate ?? recognizedDate,
-            onAddPhotos: () async {
-              final pickedPaths = await picker.pickImages();
-              final newPaths = [
-                for (final path in pickedPaths)
-                  if (processedPaths.add(path)) path,
-              ];
-              if (newPaths.isEmpty) return const [];
-              final addedDocuments = await _recognizeImages(newPaths);
-              return const SeveranceLabOcrParser().parse(addedDocuments);
-            },
-            onPickAgain: () {
-              Navigator.of(context).pop();
-              _openPhotoCapture(context, initialDate: initialDate);
-            },
-            onDirectInput: () {
-              Navigator.of(context).pop();
-              _openForm(context, initialDate: initialDate);
-            },
-          ),
-        ),
+      reviewDate ??= _reviewDate(parsed.map((item) => item.date));
+      candidates = LabCaptureMappingService(activeSettings.allDefinitions).map(
+        parsed,
+        date: reviewDate,
+        existingResults: service.resultsForDate(reviewDate ?? DateTime.now()),
       );
-      if (context.mounted && savedDate != null) {
-        await _openDetail(context, savedDate);
-      }
     } catch (_) {
-      if (!context.mounted) return;
-      Navigator.of(context).pop();
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (_) => LabCaptureReviewScreen(
-            labResultService: service,
-            labTestSettingsService: activeSettings,
-            candidates: const [],
-            initialDate: initialDate,
-            onPickAgain: () {
-              Navigator.of(context).pop();
-              _openPhotoCapture(context, initialDate: initialDate);
-            },
-            onDirectInput: () {
-              Navigator.of(context).pop();
-              _openForm(context, initialDate: initialDate);
-            },
-          ),
+      // The same Review route exposes retry/direct input for OCR failure.
+    }
+    if (!context.mounted) return;
+    Navigator.of(context).pop();
+    final savedDate = await Navigator.of(context).push<DateTime>(
+      MaterialPageRoute(
+        builder: (_) => LabCaptureReviewScreen(
+          labResultService: service,
+          labTestSettingsService: activeSettings,
+          candidates: candidates,
+          initialDate: reviewDate,
+          onAddPhotos: () async {
+            final pickedPaths = await picker.pickImages();
+            final newPaths = [
+              for (final path in pickedPaths)
+                if (processedPaths.add(path)) path,
+            ];
+            if (newPaths.isEmpty) return const [];
+            final addedDocuments = await _recognizeImages(newPaths);
+            return const SeveranceLabOcrParser().parse(addedDocuments);
+          },
+          onPickAgain: () {
+            Navigator.of(context).pop();
+            _openPhotoCapture(
+              context,
+              initialDate: initialDate,
+              showSavedDetail: showSavedDetail,
+            );
+          },
+          onDirectInput: () {
+            Navigator.of(context).pop();
+            _openForm(
+              context,
+              initialDate: initialDate,
+              showSavedDetail: showSavedDetail,
+            );
+          },
         ),
-      );
+      ),
+    );
+    if (context.mounted && savedDate != null && showSavedDetail) {
+      await _openDetail(context, savedDate);
     }
   }
 
@@ -367,8 +378,12 @@ class LabScreen extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => LabResultDetailScreen(
           service: service,
-          labTestSettingsService: labTestSettingsService,
           date: date,
+          onAddResults: (detailContext) => _openInputChoice(
+            detailContext,
+            initialDate: date,
+            showSavedDetail: false,
+          ),
         ),
       ),
     );
@@ -382,12 +397,12 @@ class LabResultDetailScreen extends StatelessWidget {
     super.key,
     required this.service,
     required this.date,
-    this.labTestSettingsService,
+    required this.onAddResults,
   });
 
   final LabResultService service;
   final DateTime date;
-  final LabTestSettingsService? labTestSettingsService;
+  final Future<void> Function(BuildContext) onAddResults;
 
   @override
   Widget build(BuildContext context) {
@@ -418,7 +433,7 @@ class LabResultDetailScreen extends StatelessWidget {
                     action: PrimaryButton(
                       key: const Key('lab-detail-add-button'),
                       label: '+ \uAC80\uC0AC \uD56D\uBAA9 \uCD94\uAC00',
-                      onPressed: () => _openForm(context),
+                      onPressed: () => onAddResults(context),
                     ),
                   )
                 else ...[
@@ -434,9 +449,8 @@ class LabResultDetailScreen extends StatelessWidget {
                           _LabResultRow(
                             key: ValueKey('lab-result-${results[i].id}'),
                             result: results[i],
-                            onTap: () => _openForm(context, result: results[i]),
-                            onEdit: () =>
-                                _openForm(context, result: results[i]),
+                            onTap: () => _editResult(context, results[i]),
+                            onEdit: () => _editResult(context, results[i]),
                             onDelete: () => _deleteResult(context, results[i]),
                           ),
                           if (i != results.length - 1)
@@ -449,7 +463,7 @@ class LabResultDetailScreen extends StatelessWidget {
                   PrimaryButton(
                     key: const Key('lab-detail-add-button'),
                     label: '+ \uAC80\uC0AC \uD56D\uBAA9 \uCD94\uAC00',
-                    onPressed: () => _openForm(context),
+                    onPressed: () => onAddResults(context),
                   ),
                 ],
               ],
@@ -460,39 +474,16 @@ class LabResultDetailScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _openForm(BuildContext context, {LabResult? result}) async {
-    Object? saved;
-    if (result == null) {
-      final settingsService = labTestSettingsService;
-      final fallbackSettingsService = settingsService == null
-          ? LabTestSettingsService.inMemory()
-          : null;
-      if (fallbackSettingsService != null) {
-        await fallbackSettingsService.load();
-      }
-      if (!context.mounted) {
-        return;
-      }
-      saved = await Navigator.of(context).push<DateTime>(
-        MaterialPageRoute(
-          builder: (_) => LabResultBatchFormScreen(
-            labResultService: service,
-            labTestSettingsService: settingsService ?? fallbackSettingsService!,
-            initialDate: date,
-          ),
+  Future<void> _editResult(BuildContext context, LabResult result) async {
+    final saved = await Navigator.of(context).push<LabResult>(
+      MaterialPageRoute(
+        builder: (_) => LabResultFormScreen(
+          service: service,
+          result: result,
+          initialDate: date,
         ),
-      );
-    } else {
-      saved = await Navigator.of(context).push<LabResult>(
-        MaterialPageRoute(
-          builder: (_) => LabResultFormScreen(
-            service: service,
-            result: result,
-            initialDate: date,
-          ),
-        ),
-      );
-    }
+      ),
+    );
     if (!context.mounted) {
       return;
     }
@@ -501,10 +492,6 @@ class LabResultDetailScreen extends StatelessWidget {
       return;
     }
     if (saved is LabResult && saved.dateKey != LabResult.formatDateKey(date)) {
-      Navigator.of(context).pop();
-    }
-    if (saved is DateTime &&
-        LabResult.formatDateKey(saved) != LabResult.formatDateKey(date)) {
       Navigator.of(context).pop();
     }
   }

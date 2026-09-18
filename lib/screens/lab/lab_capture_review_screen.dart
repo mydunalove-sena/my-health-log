@@ -8,6 +8,7 @@ import '../../models/lab_test_definition.dart';
 import '../../services/lab_capture_mapping_service.dart';
 import '../../services/lab_result_service.dart';
 import '../../services/lab_test_settings_service.dart';
+import 'lab_test_settings_screen.dart';
 
 typedef AddLabCapturePhotos =
     Future<List<ParsedLabCaptureCandidate>> Function();
@@ -103,7 +104,9 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
                   valueController: _valueControllers[candidate.id]!,
                   isEnabled: _isCandidateEnabled(candidate),
                   isResolving: _enablingCandidateIds.contains(candidate.id),
-                  onSelect: () => _selectCandidate(candidate),
+                  onSelect: (definition) =>
+                      _selectCandidate(candidate, definition: definition),
+                  onAddCustom: () => _addCustomDefinition(candidate),
                   onChanged: () => setState(_refreshExistingRows),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -175,15 +178,18 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
         widget.labTestSettingsService.enabledLabTestIds.contains(definition.id);
   }
 
-  Future<void> _selectCandidate(LabCaptureCandidate candidate) async {
+  Future<void> _selectCandidate(
+    LabCaptureCandidate candidate, {
+    LabTestDefinition? definition,
+  }) async {
     if (_enablingCandidateIds.contains(candidate.id)) return;
     _syncEditedValues();
-    final definition =
+    definition ??=
         candidate.definition ??
         LabCaptureMappingService(widget.labTestSettingsService.allDefinitions)
             .matchDefinition(candidate.rawTestName);
     if (definition == null) return;
-    if (candidate.definition == null) {
+    if (candidate.definition?.id != definition.id) {
       candidate.mapTo(definition);
     }
     setState(() => _enablingCandidateIds.add(candidate.id));
@@ -191,16 +197,27 @@ class _LabCaptureReviewScreenState extends State<LabCaptureReviewScreen> {
       await widget.labTestSettingsService.enableLabTest(definition.id);
       if (!mounted) return;
       setState(() {
+        _refreshExistingRows();
         if (!candidate.hasImportConflict && !candidate.hasExistingSameValue) {
           candidate.isSelected = true;
         }
-        _refreshExistingRows();
       });
     } finally {
       if (mounted) {
         setState(() => _enablingCandidateIds.remove(candidate.id));
       }
     }
+  }
+
+  Future<void> _addCustomDefinition(LabCaptureCandidate candidate) async {
+    final definition = await showAddCustomLabTestDialog(
+      context,
+      service: widget.labTestSettingsService,
+      initialName: candidate.rawTestName,
+      initialUnit: candidate.ocrUnit,
+    );
+    if (!mounted || definition == null) return;
+    await _selectCandidate(candidate, definition: definition);
   }
 
   Future<void> _addPhotos() async {
@@ -447,6 +464,7 @@ class _CandidateTile extends StatelessWidget {
     required this.isEnabled,
     required this.isResolving,
     required this.onSelect,
+    required this.onAddCustom,
     required this.onChanged,
   });
 
@@ -455,7 +473,8 @@ class _CandidateTile extends StatelessWidget {
   final TextEditingController valueController;
   final bool isEnabled;
   final bool isResolving;
-  final VoidCallback onSelect;
+  final ValueChanged<LabTestDefinition?> onSelect;
+  final VoidCallback onAddCustom;
   final VoidCallback onChanged;
 
   @override
@@ -482,7 +501,7 @@ class _CandidateTile extends StatelessWidget {
                   ? null
                   : (value) {
                       if (value == true) {
-                        onSelect();
+                        onSelect(null);
                       } else {
                         candidate.isSelected = false;
                         onChanged();
@@ -503,12 +522,7 @@ class _CandidateTile extends StatelessWidget {
                   child: Text(definition.displayName),
                 ),
             ],
-            onChanged: (definition) {
-              if (definition != null) {
-                candidate.mapTo(definition);
-                onChanged();
-              }
-            },
+            onChanged: isResolving ? null : onSelect,
           ),
           const SizedBox(height: AppSpacing.sm),
           TextFormField(
@@ -521,13 +535,20 @@ class _CandidateTile extends StatelessWidget {
             decoration: InputDecoration(labelText: '결과값', suffixText: unit),
             onChanged: (_) => onChanged(),
           ),
-          if (!candidate.isMapped)
+          if (!candidate.isMapped) ...[
             _Notice(
               text: candidate.hasRecognizedTestName
                   ? '검사 항목을 확인할 수 없습니다. 저장에서 제외됩니다.'
                   : '검사 항목을 인식하지 못했습니다. 저장에서 제외됩니다.',
               color: AppColors.error,
             ),
+            TextButton.icon(
+              key: ValueKey('lab-capture-add-custom-${candidate.id}'),
+              onPressed: isResolving ? null : onAddCustom,
+              icon: const Icon(Icons.add),
+              label: const Text('새 검사 항목 추가'),
+            ),
+          ],
           if (candidate.isMapped && !isEnabled) ...[
             const _Notice(text: '현재 검사 목록에 없는 항목입니다.', color: AppColors.error),
           ],

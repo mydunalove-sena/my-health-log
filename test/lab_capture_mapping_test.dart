@@ -32,6 +32,18 @@ void main() {
     }
   });
 
+  test(
+    'reported balanced Alk. Phos label already resolves with approved data',
+    () {
+      for (final name in ['Alk. Phos', 'Alk. Phos(알칼리인산분해효소)']) {
+        final definition = service.matchDefinition(name);
+        expect(definition?.id, 'alp');
+        expect(definition?.displayName, 'ALP');
+        expect(definition?.defaultUnit, 'IU/L');
+      }
+    },
+  );
+
   test('maps exact and balanced bilingual names without prefix matching', () {
     expect(service.matchDefinition('Albumin')?.id, 'albumin');
     expect(service.matchDefinition('AST(GOT) (아스파르테이트)')?.id, 'ast');

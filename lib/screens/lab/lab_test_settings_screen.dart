@@ -41,7 +41,8 @@ class LabTestSettingsScreen extends StatelessWidget {
                     ),
                     TextButton.icon(
                       key: const Key('lab-settings-add-custom-button'),
-                      onPressed: () => _showAddCustomDialog(context),
+                      onPressed: () =>
+                          showAddCustomLabTestDialog(context, service: service),
                       icon: const Icon(Icons.add),
                       label: const Text('검사 항목 추가'),
                     ),
@@ -99,14 +100,21 @@ class LabTestSettingsScreen extends StatelessWidget {
     }
     await service.setEnabledLabTestIds(ids);
   }
-
-  Future<void> _showAddCustomDialog(BuildContext context) async {
-    await showDialog<void>(
-      context: context,
-      builder: (_) => _AddCustomLabTestDialog(service: service),
-    );
-  }
 }
+
+Future<LabTestDefinition?> showAddCustomLabTestDialog(
+  BuildContext context, {
+  required LabTestSettingsService service,
+  String initialName = '',
+  String? initialUnit,
+}) => showDialog<LabTestDefinition>(
+  context: context,
+  builder: (_) => _AddCustomLabTestDialog(
+    service: service,
+    initialName: initialName,
+    initialUnit: initialUnit,
+  ),
+);
 
 class _ManagementTypeMenu extends StatelessWidget {
   const _ManagementTypeMenu({required this.service});
@@ -239,9 +247,15 @@ class _DefinitionCheckbox extends StatelessWidget {
 }
 
 class _AddCustomLabTestDialog extends StatefulWidget {
-  const _AddCustomLabTestDialog({required this.service});
+  const _AddCustomLabTestDialog({
+    required this.service,
+    required this.initialName,
+    this.initialUnit,
+  });
 
   final LabTestSettingsService service;
+  final String initialName;
+  final String? initialUnit;
 
   @override
   State<_AddCustomLabTestDialog> createState() =>
@@ -249,8 +263,8 @@ class _AddCustomLabTestDialog extends StatefulWidget {
 }
 
 class _AddCustomLabTestDialogState extends State<_AddCustomLabTestDialog> {
-  final _nameController = TextEditingController();
-  final _unitController = TextEditingController();
+  late final _nameController = TextEditingController(text: widget.initialName);
+  late final _unitController = TextEditingController(text: widget.initialUnit);
   String? _error;
   bool _isSaving = false;
 
@@ -312,25 +326,25 @@ class _AddCustomLabTestDialogState extends State<_AddCustomLabTestDialog> {
       _isSaving = true;
     });
     try {
-      await widget.service.addCustomDefinition(
+      final definition = await widget.service.addCustomDefinition(
         displayName: _nameController.text,
         defaultUnit: _unitController.text,
       );
+      if (mounted) Navigator.of(context).pop(definition);
     } on EmptyCustomLabTestNameException {
+      if (!mounted) return;
       setState(() {
         _error = '검사 항목명을 입력해주세요.';
         _isSaving = false;
       });
       return;
     } on DuplicateLabTestDefinitionException {
+      if (!mounted) return;
       setState(() {
         _error = '이미 등록된 검사 항목입니다.';
         _isSaving = false;
       });
       return;
-    }
-    if (mounted) {
-      Navigator.of(context).pop();
     }
   }
 }

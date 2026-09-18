@@ -373,6 +373,11 @@ void main() {
     await tester.tap(find.byKey(const Key('lab-detail-add-button')));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('lab-direct-input-button')), findsOneWidget);
+    expect(find.byKey(const Key('lab-photo-input-button')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('lab-direct-input-button')));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('lab-batch-date-field')), findsOneWidget);
     expect(find.text(LabResult.formatDisplayDate(date)), findsOneWidget);
   });
