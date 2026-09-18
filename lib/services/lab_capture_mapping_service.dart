@@ -108,32 +108,25 @@ class LabCaptureMappingService {
   }
 
   LabTestDefinition? _matchDefinition(String ocrName) {
-    final normalized = _normalizeName(ocrName);
+    final variants = _comparisonVariants(ocrName);
+    final definitionsById = {
+      for (final definition in definitions) definition.id: definition,
+    };
+    final matchedIds = <String>{};
     for (final definition in definitions) {
-      if (_normalizeName(definition.displayName) == normalized) {
-        return definition;
+      if (_comparisonVariants(definition.displayName).any(variants.contains)) {
+        matchedIds.add(definition.id);
       }
     }
-    final targetId =
-        explicitAliases[normalized] ?? _englishAnchorAlias(normalized);
-    if (targetId == null) return null;
-    for (final definition in definitions) {
-      if (definition.id == targetId) {
-        return definition;
+    for (final alias in explicitAliases.entries) {
+      if (definitionsById.containsKey(alias.value) &&
+          _comparisonVariants(alias.key).any(variants.contains)) {
+        matchedIds.add(alias.value);
       }
     }
-    for (final definition in definitions) {
-      if (_normalizeName(definition.displayName) == _normalizeName(targetId)) {
-        return definition;
-      }
-    }
-    return null;
-  }
-
-  String? _englishAnchorAlias(String normalized) {
-    if (normalized.startsWith('ast(got)')) return 'ast';
-    if (normalized.startsWith('alk. phos')) return 'alp';
-    return null;
+    // Exact names, aliases and annotation variants have equal authority.
+    // Never resolve a collision by registry order, including custom names.
+    return matchedIds.length == 1 ? definitionsById[matchedIds.single] : null;
   }
 
   LabResult? _existingFor(
@@ -170,27 +163,52 @@ class LabCaptureMappingService {
   }
 
   String _canonicalKeyForName(String name) {
-    final normalized = _normalizeName(name);
-    for (final definition in definitions) {
-      if (_normalizeName(definition.displayName) == normalized) {
-        return _canonicalKeyForDefinition(definition);
-      }
-    }
-    final targetId =
-        explicitAliases[normalized] ?? _englishAnchorAlias(normalized);
-    if (targetId != null) {
-      return 'def:$targetId';
-    }
-    return 'raw:$normalized';
+    final definition = _matchDefinition(name);
+    return definition == null
+        ? 'raw:${_normalizeName(name)}'
+        : _canonicalKeyForDefinition(definition);
   }
 
   static String _normalizeName(String value) {
     return value
         .replaceAll(RegExp(r'\s+'), ' ')
-        .replaceAll(' (', '(')
-        .replaceAll(' )', ')')
+        .replaceAll(RegExp(r'\s*\(\s*'), '(')
+        .replaceAll(RegExp(r'\s+\)'), ')')
         .trim()
         .toLowerCase();
+  }
+
+  static Set<String> _comparisonVariants(String value) {
+    final normalized = _normalizeName(value);
+    final variants = <String>{if (normalized.isNotEmpty) normalized};
+    if (!normalized.endsWith(')')) return variants;
+
+    var depth = 0;
+    var trailingStart = -1;
+    for (var index = 0; index < normalized.length; index++) {
+      if (normalized[index] == '(') {
+        if (depth == 0) trailingStart = index;
+        depth++;
+      } else if (normalized[index] == ')') {
+        depth--;
+        if (depth < 0) return variants;
+      }
+    }
+    if (depth != 0 || trailingStart <= 0) return variants;
+    final annotation = normalized.substring(
+      trailingStart + 1,
+      normalized.length - 1,
+    );
+    // Only a flat, balanced, trailing Hangul annotation supplies a base variant.
+    // Meaningful qualifiers such as (GOT)/(E), hyphens and slashes stay intact.
+    if (annotation.contains('(') ||
+        annotation.contains(')') ||
+        !RegExp(r'[가-힣ㄱ-ㅣᄀ-ᇿ]').hasMatch(annotation)) {
+      return variants;
+    }
+    final base = normalized.substring(0, trailingStart).trim();
+    if (base.isNotEmpty) variants.add(base);
+    return variants;
   }
 
   static bool _unitsAreCompatible(String? left, String? right) {

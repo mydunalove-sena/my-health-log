@@ -89,6 +89,7 @@ class SeveranceLabOcrParser {
             line.normalizedLeft < 0.68 &&
             !blocked.contains(line.text.trim()) &&
             !_looksLikeUnit(line.text) &&
+            !_isRange(line.text) &&
             _parseAnyNumber(line.text) == null)
           line,
     ];
@@ -99,23 +100,30 @@ class SeveranceLabOcrParser {
       return b.normalizedCenterY.compareTo(a.normalizedCenterY);
     });
     final first = candidates.first;
-    final splitTail = candidates
-        .where(
-          (line) =>
-              line != first &&
-              line.normalizedCenterY > first.normalizedCenterY &&
-              line.normalizedCenterY < resultLabel.normalizedCenterY &&
-              line.normalizedLeft < 0.25 &&
-              line.text.trim().endsWith(')'),
-        )
-        .toList();
-    if (splitTail.isEmpty) return first;
-    final mergedText =
-        ([first, ...splitTail]..sort(
-              (a, b) => a.normalizedCenterY.compareTo(b.normalizedCenterY),
-            ))
-            .map((line) => line.text.trim())
-            .join('');
+    var mergedText = first.text.trim();
+    if (_openParentheses(mergedText) <= 0) return first;
+    final splitTail =
+        candidates
+            .where(
+              (line) =>
+                  line != first &&
+                  line.normalizedCenterY > first.normalizedCenterY &&
+                  line.normalizedCenterY < resultLabel.normalizedCenterY &&
+                  line.normalizedLeft < 0.25 &&
+                  line.text.trim().endsWith(')'),
+            )
+            .toList()
+          ..sort((a, b) => a.normalizedCenterY.compareTo(b.normalizedCenterY));
+    for (final tail in splitTail) {
+      if (_openParentheses(mergedText) <= 0) break;
+      final text = tail.text.trim();
+      // A new parenthesized label is not a continuation of the open one.
+      if (text.contains('(') || _openParentheses('$mergedText$text') < 0) {
+        continue;
+      }
+      mergedText += text;
+    }
+    if (mergedText == first.text.trim()) return first;
     return LabOcrLine(
       text: mergedText,
       left: first.left,
@@ -165,12 +173,47 @@ class SeveranceLabOcrParser {
   }
 
   bool _looksLikeUnit(String text) {
-    final value = text.trim().toLowerCase();
-    return value.contains('mg/dl') ||
-        value.contains('g/dl') ||
-        value.contains('iu/l') ||
-        value.contains('ng/ml') ||
-        value == '%';
+    var value = text.trim().toLowerCase();
+    if (value.startsWith('(') && value.endsWith(')')) {
+      value = value.substring(1, value.length - 1).trim();
+    }
+    if (value == '%') return true;
+    if (value.length > 48 || !value.contains('/')) return false;
+
+    // Require unit tokens and a ratio, not arbitrary English/slash text (Kt/V).
+    // SI prefixes, scale/exponent notation and compound denominators are allowed.
+    const atom =
+        r'(?:[fpnumkdcµμ]?(?:g|l|mol|eq|kat)|iu|u|osm|osmol|min|s|h|d|m)';
+    const exponent = r'(?:\^[+-]?\d+|[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]+)';
+    const factor =
+        r'(?:\d+(?:\.\d+)?\s*)?'
+        '$atom$exponent?';
+    const product =
+        '$factor'
+        r'(?:\s*[.·*]\s*'
+        '$factor)*';
+    const scale =
+        r'[×x*]?\s*10'
+        '$exponent';
+    final pattern = RegExp(
+      '^(?:(?:$scale'
+      r'\s*)?'
+      '$product|$scale)'
+      r'(?:\s*/\s*'
+      '$product)'
+      r'+$',
+    );
+    return pattern.hasMatch(value);
+  }
+
+  int _openParentheses(String text) {
+    var depth = 0;
+    for (final character in text.split('')) {
+      if (character == '(') depth++;
+      if (character == ')') depth--;
+      if (depth < 0) return -1;
+    }
+    return depth;
   }
 
   int _testNameScore(LabOcrLine line) {

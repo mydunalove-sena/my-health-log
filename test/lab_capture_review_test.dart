@@ -462,6 +462,86 @@ void main() {
     });
   }
 
+  testWidgets(
+    'runtime bilingual mapping enables a disabled item without saving',
+    (tester) async {
+      final labService = await _labService();
+      final settings = await _persistentProfileSettings(
+        LabManagementType.dialysis,
+      );
+      final profile = settings.managementType;
+      final candidate = LabCaptureMappingService(settings.allDefinitions)
+          .map([_parsed('Triglyceride(중성지방)', 164)])
+          .single;
+      expect(candidate.definition?.id, 'triglyceride');
+      expect(settings.enabledLabTestIds, isNot(contains('triglyceride')));
+
+      await _pumpReview(tester, labService, settings, [candidate]);
+      expect(candidate.isSelected, isFalse);
+      expect(find.text('Triglyceride'), findsWidgets);
+      final field = tester.widget<DropdownButtonFormField<LabTestDefinition>>(
+        find.byKey(const Key('lab-capture-map-0')),
+      );
+      expect(field.initialValue?.id, 'triglyceride');
+      expect(labService.results, isEmpty);
+      await tester.tap(find.byKey(const Key('lab-capture-check-0')));
+      await tester.pumpAndSettle();
+
+      expect(candidate.definition?.id, 'triglyceride');
+      expect(candidate.mappingStatus, LabCaptureMappingStatus.mapped);
+      expect(candidate.isSelected, isTrue);
+      expect(candidate.rawTestName, 'Triglyceride(중성지방)');
+      expect(candidate.value, 164);
+      expect(candidate.saveUnit, 'mg/dL');
+      expect(settings.enabledLabTestIds, contains('triglyceride'));
+      expect(settings.managementType, profile);
+      expect(find.byType(SimpleDialog), findsNothing);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(labService.results, isEmpty);
+      final reloaded = LabTestSettingsService();
+      await reloaded.load();
+      expect(reloaded.enabledLabTestIds, contains('triglyceride'));
+      expect(reloaded.managementType, profile);
+
+      await _tapSave(tester);
+      await tester.pumpAndSettle();
+      expect(labService.results.single.testName, 'Triglyceride');
+      expect(labService.results.single.value, 164);
+    },
+  );
+
+  testWidgets(
+    'real resolver collision stays unmapped on retry and forced save',
+    (tester) async {
+      final labService = await _labService();
+      final settings = await _settings();
+      await settings.addCustomDefinition(displayName: 'HDL-Cholesterol');
+      final enabledBefore = settings.enabledLabTestIds;
+      final candidates = LabCaptureMappingService(settings.allDefinitions)
+          .map([_parsed('HDL-Cholesterol(한글)', 65), _parsed('BUN', 19.4)]);
+      final ambiguous = candidates.first;
+      expect(ambiguous.definition, isNull);
+      expect(ambiguous.isSelected, isFalse);
+      await _pumpReview(tester, labService, settings, candidates);
+      await tester.tap(find.byKey(const Key('lab-capture-check-0')));
+      await tester.pumpAndSettle();
+      expect(ambiguous.definition, isNull);
+      expect(ambiguous.mappingStatus, LabCaptureMappingStatus.unmapped);
+      expect(ambiguous.isSelected, isFalse);
+      expect(settings.enabledLabTestIds, enabledBefore);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(SimpleDialog), findsNothing);
+      expect(labService.results, isEmpty);
+
+      ambiguous.isSelected = true;
+      await _tapSave(tester);
+      await tester.pumpAndSettle();
+      expect(labService.results, hasLength(1));
+      expect(labService.results.single.testName, 'BUN');
+      expect(labService.results.single.value, 19.4);
+    },
+  );
+
   testWidgets('unmapped exact alias auto-links and enables on checkbox tap', (
     tester,
   ) async {

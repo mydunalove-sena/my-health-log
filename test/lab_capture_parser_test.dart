@@ -1,9 +1,169 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_health_log/core/constants/lab_test_definitions.dart';
 import 'package:my_health_log/models/lab_capture_candidate.dart';
+import 'package:my_health_log/services/lab_capture_mapping_service.dart';
 import 'package:my_health_log/services/severance_lab_ocr_parser.dart';
 
 void main() {
   const parser = SeveranceLabOcrParser();
+
+  test('runtime Na and K retain their labels and mmol/L units', () {
+    final parsed = parser.parse([_runtimeDocument()]);
+    final sodium = parsed.singleWhere((item) => item.value == 136);
+    final potassium = parsed.singleWhere((item) => item.value == 4.5);
+    expect(sodium.rawTestName, 'Na(나트륨)');
+    expect(potassium.rawTestName, 'K(칼륨)');
+    expect(sodium.unit, 'mmol/L');
+    expect(potassium.unit, 'mmol/L');
+    expect(parsed.any((item) => item.rawTestName == '(mmol/L)K(칼륨)'), isFalse);
+  });
+
+  test('runtime HDL head and tail still join after continuation guards', () {
+    final parsed = parser.parse([_runtimeDocument()]);
+    final hdl = parsed.singleWhere((item) => item.value == 65);
+    expect(hdl.rawTestName, 'HDL-Cholesterol (고밀도지단백콜레스테롤검사)');
+    expect(hdl.unit, 'mg/dL');
+  });
+
+  test(
+    'complete runtime capture maps all four labels without changing values',
+    () {
+      final parsed = parser.parse([_runtimeDocument()]);
+      final mapped = LabCaptureMappingService(predefinedLabTestDefinitions)
+          .map(parsed);
+      expect(mapped.map((item) => item.definition?.id), [
+        'triglyceride',
+        'hdl',
+        'sodium',
+        'potassium',
+      ]);
+      expect(mapped.map((item) => item.value), [164, 65, 136, 4.5]);
+      expect(mapped.map((item) => item.ocrUnit), [
+        'mg/dL',
+        'mg/dL',
+        'mmol/L',
+        'mmol/L',
+      ]);
+    },
+  );
+
+  for (final unit in [
+    'mmol/L',
+    'mg/dL',
+    'g/dL',
+    'ng/mL',
+    'IU/L',
+    'U/L',
+    'pg/mL',
+    'mL/min',
+    '10^3/uL',
+    '×10³/µL',
+    'mL/min/1.73m²',
+    'mg/L',
+    '%',
+    'mg / dL',
+  ]) {
+    test(
+      'unit syntax $unit is extracted and excluded from name candidates',
+      () {
+        final parsed = parser.parse([
+          _doc([
+            _line('($unit)', 600, 250, 715, 280),
+            _line('Q', 80, 300, 100, 340),
+            _line('결과', 42, 440, 100, 470),
+            _line('4.5', 278, 444, 350, 474),
+            _line('참고치', 28, 538, 140, 575),
+            _line('($unit)', 598, 546, 730, 580),
+          ]),
+        ]);
+        expect(parsed.single.rawTestName, 'Q');
+        expect(parsed.single.unit, unit);
+        expect(
+          parser.parse([
+            _doc([
+              _line('($unit)', 80, 300, 320, 340),
+              _line('결과', 42, 440, 100, 470),
+              _line('4.5', 278, 444, 350, 474),
+            ]),
+          ]),
+          isEmpty,
+        );
+      },
+    );
+  }
+
+  for (final label in [
+    'AST(GOT)',
+    'Total Protein(E)',
+    'Kt/V',
+    'General English Label',
+    'HbA1c',
+  ]) {
+    test('does not classify lab or English label $label as a unit', () {
+      final parsed = parser.parse([
+        _doc([
+          _line(label, 80, 300, 650, 340),
+          _line('결과', 42, 440, 100, 470),
+          _line('21', 278, 444, 350, 474),
+          _line('참고치', 28, 538, 140, 575),
+          _line(label, 598, 546, 900, 580),
+        ]),
+      ]);
+      expect(parsed.single.rawTestName, label);
+      expect(parsed.single.unit, isNull);
+    });
+  }
+
+  for (final range in ['135.0-145.0', '3.5~5.5', '-1.0-1.0']) {
+    test('numeric reference range $range is never a test name', () {
+      expect(
+        parser.parse([
+          _doc([
+            _line(range, 80, 300, 420, 340),
+            _line('결과', 42, 440, 100, 470),
+            _line('4.5', 278, 444, 350, 474),
+          ]),
+        ]),
+        isEmpty,
+      );
+    });
+  }
+
+  test(
+    'balanced name does not consume a different label ending in parentheses',
+    () {
+      final parsed = parser.parse([
+        _doc([
+          _line('Marker(검사)', 80, 300, 350, 340),
+          _line('Q(항목)', 82, 342, 220, 374),
+          _line('결과', 42, 440, 100, 470),
+          _line('21', 278, 444, 350, 474),
+        ]),
+      ]);
+      expect(parsed.single.rawTestName, 'Marker(검사)');
+    },
+  );
+
+  test(
+    'continuation stops when balanced and rejects a fresh parenthetical label',
+    () {
+      for (final tail in ['끝)', 'Q(항목)']) {
+        final parsed = parser.parse([
+          _doc([
+            _line('Marker(미완성', 80, 300, 350, 340),
+            _line(tail, 82, 342, 220, 374),
+            _line('Z(기타)', 82, 380, 220, 410),
+            _line('결과', 42, 440, 100, 470),
+            _line('21', 278, 444, 350, 474),
+          ]),
+        ]);
+        expect(
+          parsed.single.rawTestName,
+          tail == '끝)' ? 'Marker(미완성끝)' : 'Marker(미완성',
+        );
+      }
+    },
+  );
 
   test('preserves decimals and integers while excluding reference ranges', () {
     final parsed = parser.parse([
@@ -88,6 +248,67 @@ void main() {
 
     expect(parsed.single.date, DateTime(2026, 8, 11));
   });
+}
+
+// Actual ML Kit order/boxes from runtime session 1789705938450810, image 0.
+// Retain the full 1080 x 2316 document, including prior-row units and UI labels.
+LabOcrDocument _runtimeDocument() {
+  const entries = <(String, double, double, double, double)>[
+    ('12:40 O •', 50, 32, 317, 71),
+    ('← 검사결과조회', 31, 144, 361, 196),
+    ('Triglyceride(중성지방)', 91, 356, 468, 395),
+    ('결과', 47, 512, 112, 546),
+    ('참고치', 28, 619, 156, 663),
+    ('롤검사)', 90, 844, 203, 886),
+    ('결과', 47, 1001, 112, 1035),
+    ('HDL-Cholesterol (고밀도지단백콜레스테', 79, 806, 756, 849),
+    ('참고치', 30, 1109, 158, 1152),
+    ('Na(나트륨)', 72, 1295, 282, 1338),
+    ('결과', 47, 1457, 112, 1491),
+    ('참고치', 29, 1566, 158, 1609),
+    ('K(칼륨)', 92, 1755, 209, 1795),
+    ('결과', 47, 1913, 112, 1947),
+    ('164', 315, 518, 385, 550),
+    ('참고치', 47, 2025, 143, 2059),
+    ('48-200', 314, 631, 472, 663),
+    ('65', 315, 1007, 364, 1039),
+    ('40-75', 314, 1120, 443, 1152),
+    ('136', 315, 1463, 384, 1495),
+    ('135.0-145.0', 313, 1576, 557, 1607),
+    ('4.5', 315, 1919, 374, 1951),
+    ('3.5~5.5', 315, 2031, 466, 2063),
+    ('(mg/dL)', 677, 631, 810, 668),
+    ('검사정보', 799, 354, 931, 389),
+    ('(mg/dL)', 677, 1119, 806, 1157),
+    ('l100', 912, 37, 1036, 70),
+    ('검사정보', 799, 824, 951, 862),
+    ('(mmol/L)', 677, 1576, 828, 1613),
+    ('그래프', 871, 514, 971, 549),
+    ('검사정보', 800, 1301, 951, 1336),
+    ('(mmol/L)', 676, 2028, 826, 2069),
+    ('그래프', 871, 1004, 971, 1039),
+    ('그래프', 872, 1461, 972, 1495),
+    ('검사정보', 799, 1754, 932, 1790),
+    ('그래프', 872, 1917, 972, 1951),
+  ];
+  return LabOcrDocument(
+    sourceImageIndex: 0,
+    imageWidth: 1080,
+    imageHeight: 2316,
+    lines: [
+      for (final (text, left, top, right, bottom) in entries)
+        LabOcrLine(
+          text: text,
+          left: left,
+          top: top,
+          right: right,
+          bottom: bottom,
+          sourceImageIndex: 0,
+          imageWidth: 1080,
+          imageHeight: 2316,
+        ),
+    ],
+  );
 }
 
 LabOcrDocument _doc(List<LabOcrLine> lines) {
