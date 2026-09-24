@@ -200,6 +200,8 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
                 const SizedBox(height: AppSpacing.md),
                 if (snapshot.connectionState != ConnectionState.done)
                   const Center(child: CircularProgressIndicator())
+                else if (snapshot.hasError)
+                  const Text('복약 기록을 불러오지 못했습니다.')
                 else if (day == null || day.isEmpty)
                   EmptyState(
                     icon: Icons.history,
@@ -306,10 +308,20 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
     );
     if (type == null || !mounted) return;
     if (type == _MissingMedicationLogType.scheduled) {
-      final medication = await _chooseMedication(scheduled);
-      if (medication != null) {
-        await _openScheduledCorrection(medication);
-      }
+      final selectedDate = _selectedDate;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _ScheduledBatchDialog(
+          service: widget.service,
+          selectedDate: selectedDate,
+          onManualRecord: (item) => _openScheduledCorrection(
+            item.medication,
+            initialTimeSlot: item.timeSlot,
+          ),
+        ),
+      );
+      if (mounted) setState(() {});
       return;
     }
     final medication = await _chooseMedication(prn);
@@ -338,6 +350,7 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
   Future<void> _openScheduledCorrection(
     Medication medication, {
     MedicationLog? existingLog,
+    MedicationTimeSlot? initialTimeSlot,
   }) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -346,6 +359,7 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
           medication: medication,
           selectedDate: _selectedDate,
           existingLog: existingLog,
+          initialTimeSlot: initialTimeSlot,
         ),
       ),
     );
@@ -582,18 +596,233 @@ class _PrnHistoryRow extends StatelessWidget {
   }
 }
 
+class _ScheduledBatchDialog extends StatefulWidget {
+  const _ScheduledBatchDialog({
+    required this.service,
+    required this.selectedDate,
+    required this.onManualRecord,
+  });
+
+  final MedicationService service;
+  final DateTime selectedDate;
+  final Future<void> Function(MedicationDoseItem) onManualRecord;
+
+  @override
+  State<_ScheduledBatchDialog> createState() => _ScheduledBatchDialogState();
+}
+
+class _ScheduledBatchDialogState extends State<_ScheduledBatchDialog> {
+  late Future<List<MedicationDoseItem>> _items;
+  final Set<MedicationDoseItem> _selected = {};
+  bool _saving = false;
+  bool _saved = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _items = widget.service.scheduledItemsForDate(widget.selectedDate);
+  }
+
+  void _reload() {
+    _selected.clear();
+    _items = widget.service.scheduledItemsForDate(widget.selectedDate);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_saving,
+      child: AlertDialog(
+        title: Text('정기 복약 추가\n${_formatDate(widget.selectedDate)}'),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('현재 정기약 설정 기준'),
+                const SizedBox(height: AppSpacing.sm),
+                FutureBuilder<List<MedicationDoseItem>>(
+                  future: _items,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Column(
+                        children: [
+                          const Text('정기약 목록을 불러오지 못했습니다.'),
+                          TextButton(
+                            onPressed: _saving ? null : () => setState(_reload),
+                            child: const Text('다시 불러오기'),
+                          ),
+                        ],
+                      );
+                    }
+                    final items = snapshot.data!;
+                    if (items.isEmpty) return const Text('현재 활성 정기약이 없습니다.');
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final slot in MedicationTimeSlot.values)
+                          if (items.any((item) => item.timeSlot == slot)) ...[
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                top: AppSpacing.md,
+                              ),
+                              child: Text(
+                                '${slot.label} · ${slot.defaultTakenAt(widget.selectedDate) == null ? '시간 직접 입력' : _formatTime(slot.defaultTakenAt(widget.selectedDate)!)}',
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                            ),
+                            for (final item in items.where(
+                              (item) => item.timeSlot == slot,
+                            ))
+                              _buildItem(item),
+                          ],
+                      ],
+                    );
+                  },
+                ),
+                if (_saved) const Text('선택 항목을 저장했습니다.'),
+                if (_error != null)
+                  Text(_error!, style: const TextStyle(color: AppColors.error)),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: _saving ? null : () => Navigator.of(context).pop(),
+            child: const Text('닫기'),
+          ),
+          FilledButton(
+            key: const Key('med-batch-save'),
+            onPressed: _saving || _selected.isEmpty ? null : _save,
+            child: Text(_saving ? '저장 중…' : '선택 항목 저장'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItem(MedicationDoseItem item) {
+    final log = item.log;
+    final defaultTime = item.timeSlot.defaultTakenAt(widget.selectedDate);
+    final futureTime = defaultTime?.isAfter(DateTime.now()) ?? false;
+    final dose = log == null
+        ? item.medication.displayDose ?? '복용량 설정 없음'
+        : log.displayDoseSnapshot ?? '복용량 기록 없음';
+    final status = log != null
+        ? '이미 기록됨 · ${log.isTaken ? '복용' : '미복용'}'
+        : futureTime
+        ? '미기록 · 복용 시간 전'
+        : '미기록';
+    final subtitle = Text('$dose\n$status');
+    final key = '${item.medication.id}-${item.timeSlot.value}';
+    if (defaultTime == null) {
+      return ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(item.medication.name),
+        subtitle: subtitle,
+        trailing: log == null
+            ? TextButton(
+                key: ValueKey('med-batch-manual-$key'),
+                onPressed: _saving ? null : () => _recordManually(item),
+                child: const Text('시간 입력'),
+              )
+            : const Icon(Icons.lock_outline),
+      );
+    }
+    return CheckboxListTile(
+      key: ValueKey('med-batch-$key'),
+      contentPadding: EdgeInsets.zero,
+      controlAffinity: ListTileControlAffinity.leading,
+      title: Text(item.medication.name),
+      subtitle: subtitle,
+      secondary: log == null
+          ? IconButton(
+              key: ValueKey('med-batch-manual-$key'),
+              tooltip: '시간 직접 입력',
+              onPressed: _saving ? null : () => _recordManually(item),
+              icon: const Icon(Icons.edit_outlined),
+            )
+          : null,
+      value: log?.isTaken ?? _selected.contains(item),
+      onChanged: _saving || log != null || futureTime
+          ? null
+          : (value) {
+              setState(() {
+                if (value == true) {
+                  _selected.add(item);
+                } else {
+                  _selected.remove(item);
+                }
+                _error = null;
+                _saved = false;
+              });
+            },
+    );
+  }
+
+  Future<void> _recordManually(MedicationDoseItem item) async {
+    if (_saving) return;
+    setState(() {
+      _saving = true;
+      _saved = false;
+      _error = null;
+    });
+    try {
+      await widget.onManualRecord(item);
+      if (mounted) setState(_reload);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (_saving || _selected.isEmpty) return;
+    setState(() {
+      _saving = true;
+      _saved = false;
+      _error = null;
+    });
+    try {
+      await widget.service.addMissingScheduledLogs(
+        date: widget.selectedDate,
+        items: _selected.toList(),
+      );
+      if (!mounted) return;
+      setState(() {
+        _reload();
+        _saved = true;
+      });
+    } on FuturePrnMedicationTimeException {
+      if (mounted) setState(() => _error = '미래 시간에는 저장할 수 없습니다.');
+    } catch (_) {
+      if (mounted) setState(() => _error = '저장하지 못했습니다. 다시 시도해주세요.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+}
+
 class _ScheduledMedicationLogFormScreen extends StatefulWidget {
   const _ScheduledMedicationLogFormScreen({
     required this.service,
     required this.medication,
     required this.selectedDate,
     this.existingLog,
+    this.initialTimeSlot,
   });
 
   final MedicationService service;
   final Medication medication;
   final DateTime selectedDate;
   final MedicationLog? existingLog;
+  final MedicationTimeSlot? initialTimeSlot;
 
   @override
   State<_ScheduledMedicationLogFormScreen> createState() =>
@@ -604,18 +833,21 @@ class _ScheduledMedicationLogFormScreenState
     extends State<_ScheduledMedicationLogFormScreen> {
   late MedicationTimeSlot _timeSlot;
   late bool _isTaken;
-  late TimeOfDay _takenTime;
+  TimeOfDay? _takenTime;
   String? _formError;
 
   @override
   void initState() {
     super.initState();
     final existing = widget.existingLog;
-    _timeSlot = existing?.timeSlot ?? widget.medication.timeSlots.first;
+    _timeSlot =
+        existing?.timeSlot ??
+        widget.initialTimeSlot ??
+        widget.medication.timeSlots.first;
     _isTaken = existing?.isTaken ?? true;
-    _takenTime = TimeOfDay.fromDateTime(
-      existing?.takenAt ?? _defaultTakenAt(widget.selectedDate),
-    );
+    final takenAt =
+        existing?.takenAt ?? _timeSlot.defaultTakenAt(widget.selectedDate);
+    _takenTime = takenAt == null ? null : TimeOfDay.fromDateTime(takenAt);
   }
 
   @override
@@ -649,14 +881,27 @@ class _ScheduledMedicationLogFormScreenState
               initialValue: _timeSlot,
               decoration: _inputDecoration(labelText: '복용 시간대'),
               items: [
-                for (final slot in widget.medication.timeSlots)
+                for (final slot
+                    in widget.existingLog == null
+                        ? widget.medication.timeSlots
+                        : [widget.existingLog!.timeSlot])
                   DropdownMenuItem(value: slot, child: Text(slot.label)),
               ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _timeSlot = value);
-                }
-              },
+              onChanged: widget.existingLog != null
+                  ? null
+                  : (value) {
+                      if (value != null) {
+                        setState(() {
+                          _timeSlot = value;
+                          final defaultTime = value.defaultTakenAt(
+                            widget.selectedDate,
+                          );
+                          _takenTime = defaultTime == null
+                              ? null
+                              : TimeOfDay.fromDateTime(defaultTime);
+                        });
+                      }
+                    },
             ),
             const SizedBox(height: AppSpacing.md),
             SwitchListTile(
@@ -670,8 +915,10 @@ class _ScheduledMedicationLogFormScreenState
               _HistoryActionField(
                 key: const Key('scheduled-correction-time-field'),
                 label: '실제 복용 시간',
-                value: MaterialLocalizations.of(context)
-                    .formatTimeOfDay(_takenTime),
+                value: _takenTime == null
+                    ? '복용 시간을 선택해주세요.'
+                    : MaterialLocalizations.of(context)
+                          .formatTimeOfDay(_takenTime!),
                 onTap: _pickTakenTime,
               ),
             ],
@@ -697,7 +944,7 @@ class _ScheduledMedicationLogFormScreenState
   Future<void> _pickTakenTime() async {
     final picked = await showTimePicker(
       context: context,
-      initialTime: _takenTime,
+      initialTime: _takenTime ?? TimeOfDay.now(),
     );
     if (picked != null) {
       setState(() {
@@ -709,13 +956,17 @@ class _ScheduledMedicationLogFormScreenState
 
   Future<void> _save() async {
     setState(() => _formError = null);
+    if (_isTaken && _takenTime == null) {
+      setState(() => _formError = '실제 복용 시간을 선택해주세요.');
+      return;
+    }
     final takenAt = _isTaken
         ? DateTime(
             widget.selectedDate.year,
             widget.selectedDate.month,
             widget.selectedDate.day,
-            _takenTime.hour,
-            _takenTime.minute,
+            _takenTime!.hour,
+            _takenTime!.minute,
           )
         : null;
     try {
@@ -725,26 +976,23 @@ class _ScheduledMedicationLogFormScreenState
         timeSlot: _timeSlot,
         isTaken: _isTaken,
         takenAt: takenAt,
+        existingLog: widget.existingLog,
       );
+    } on DuplicateMedicationLogException {
+      if (mounted) setState(() => _formError = '이미 기록된 항목입니다. 기록 화면에서 수정해주세요.');
+      return;
     } on FuturePrnMedicationDateException {
       setState(() => _formError = '미래 날짜에는 저장할 수 없습니다.');
       return;
     } on FuturePrnMedicationTimeException {
       setState(() => _formError = '미래 시간에는 저장할 수 없습니다.');
       return;
+    } catch (_) {
+      if (mounted) setState(() => _formError = '저장하지 못했습니다. 다시 시도해주세요.');
+      return;
     }
     if (!mounted) return;
     Navigator.of(context).pop();
-  }
-
-  DateTime _defaultTakenAt(DateTime date) {
-    final now = DateTime.now();
-    final normalizedToday = DateTime(now.year, now.month, now.day);
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-    if (normalizedDate == normalizedToday) {
-      return now;
-    }
-    return DateTime(date.year, date.month, date.day, 9);
   }
 
   InputDecoration _inputDecoration({String? labelText}) {

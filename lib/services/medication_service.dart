@@ -53,7 +53,17 @@ abstract class MedicationStorage {
     bool isActive,
     DateTime updatedAt,
   );
-  Future<void> upsertMedicationLog(MedicationLog log);
+  Future<void> upsertMedicationLog(
+    MedicationLog log, {
+    bool insertOnly = false,
+  });
+
+  /// Atomically inserts missing selections and returns all logs for [date].
+  Future<List<MedicationLog>> insertMissingScheduledLogs({
+    required DateTime date,
+    required List<MedicationDoseItem> items,
+    required DateTime now,
+  });
   Future<void> insertPrnMedicationLog(
     PrnMedicationLog log, {
     List<PrnSymptomLink> symptomLinks = const [],
@@ -74,6 +84,7 @@ class MedicationService extends ChangeNotifier {
   final List<PrnMedicationLog> _prnLogsForLoadedDate = [];
   final List<PrnSymptomLink> _prnSymptomLinks = [];
   DateTime _loadedDate = _today();
+  bool _savingScheduledBatch = false;
 
   List<Medication> get activeMedications =>
       List.unmodifiable(_activeMedications);
@@ -108,16 +119,33 @@ class MedicationService extends ChangeNotifier {
   }
 
   List<MedicationDoseItem> doseItemsForDate(DateTime date) {
+    return _doseItemsForDate(date, _activeMedications, _logsByKey);
+  }
+
+  /// Reads the chosen day without changing the Today cache or its loaded date.
+  Future<List<MedicationDoseItem>> scheduledItemsForDate(DateTime date) async {
+    final medications = await _storage.fetchActiveMedications();
+    final logs = await _storage.fetchLogsForDate(_normalize(date));
+    return _doseItemsForDate(date, medications, {
+      for (final log in logs) log.uniqueKey: log,
+    });
+  }
+
+  List<MedicationDoseItem> _doseItemsForDate(
+    DateTime date,
+    List<Medication> medications,
+    Map<String, MedicationLog> logs,
+  ) {
     final dateKey = MedicationLog.formatDateKey(date);
     return [
-      for (final medication in _activeMedications)
+      for (final medication in medications)
         if (medication.isScheduled)
           for (final slot in MedicationTimeSlot.values)
             if (medication.isScheduledFor(slot))
               MedicationDoseItem(
                 medication: medication,
                 timeSlot: slot,
-                log: _logsByKey['${medication.id}|$dateKey|${slot.value}'],
+                log: logs['${medication.id}|$dateKey|${slot.value}'],
               ),
     ];
   }
@@ -397,13 +425,20 @@ class MedicationService extends ChangeNotifier {
     required DateTime date,
     required MedicationTimeSlot timeSlot,
     required bool isTaken,
+    MedicationLog? existingLog,
     DateTime? takenAt,
     DateTime? now,
   }) async {
     if (!medication.isScheduled) {
       throw const InvalidPrnMedicationException();
     }
-    if (!medication.isScheduledFor(timeSlot)) {
+    if (existingLog != null &&
+        (existingLog.medicationId != medication.id ||
+            existingLog.timeSlot != timeSlot ||
+            existingLog.dateKey != MedicationLog.formatDateKey(date))) {
+      throw ArgumentError('Existing scheduled log identity cannot change.');
+    }
+    if (existingLog == null && !medication.isScheduledFor(timeSlot)) {
       throw const EmptyMedicationTimeSlotException();
     }
 
@@ -430,7 +465,14 @@ class MedicationService extends ChangeNotifier {
         )
         .toList();
     final existing = matchingLogs.isEmpty ? null : matchingLogs.first;
+    if (existingLog == null && existing != null) {
+      throw const DuplicateMedicationLogException();
+    }
+    if (existingLog != null && existing?.id != existingLog.id) {
+      throw ArgumentError('The original scheduled log no longer matches.');
+    }
     final createdAt = existing?.createdAt ?? currentNow;
+    final preserveSnapshot = existing?.isTaken == true;
     final next = MedicationLog(
       id: existing?.id ?? 'medlog-${currentNow.microsecondsSinceEpoch}',
       medicationId: medication.id,
@@ -438,20 +480,62 @@ class MedicationService extends ChangeNotifier {
       timeSlot: timeSlot,
       isTaken: isTaken,
       takenAt: isTaken ? takenAt : null,
-      doseSnapshot: null,
-      doseValueSnapshot: null,
-      doseUnitSnapshot: null,
+      doseSnapshot: !isTaken
+          ? null
+          : preserveSnapshot
+          ? existing!.doseSnapshot
+          : medication.dose,
+      doseValueSnapshot: !isTaken
+          ? null
+          : preserveSnapshot
+          ? existing!.doseValueSnapshot
+          : medication.doseValue,
+      doseUnitSnapshot: !isTaken
+          ? null
+          : preserveSnapshot
+          ? existing!.doseUnitSnapshot
+          : medication.doseUnit,
       createdAt: createdAt,
       updatedAt: currentNow,
     );
 
-    await _storage.upsertMedicationLog(next);
+    await _storage.upsertMedicationLog(next, insertOnly: existingLog == null);
     if (MedicationLog.formatDateKey(correctedDate) ==
         MedicationLog.formatDateKey(_loadedDate)) {
       _logsByKey[next.uniqueKey] = next;
     }
     notifyListeners();
     return next;
+  }
+
+  Future<void> addMissingScheduledLogs({
+    required DateTime date,
+    required List<MedicationDoseItem> items,
+    DateTime? now,
+  }) async {
+    if (_savingScheduledBatch) {
+      throw StateError('A scheduled batch is already being saved.');
+    }
+    final selectedDate = _normalize(date);
+    final currentNow = now ?? DateTime.now();
+    final selections = List<MedicationDoseItem>.of(items);
+    _savingScheduledBatch = true;
+    try {
+      final logs = await _storage.insertMissingScheduledLogs(
+        date: selectedDate,
+        items: selections,
+        now: currentNow,
+      );
+      // Storage returns only after commit. No partial cache changes on failure.
+      if (selectedDate == _loadedDate) {
+        _logsByKey
+          ..clear()
+          ..addEntries(logs.map((log) => MapEntry(log.uniqueKey, log)));
+      }
+      notifyListeners();
+    } finally {
+      _savingScheduledBatch = false;
+    }
   }
 
   Future<PrnMedicationLog> recordPrnTaken({
@@ -735,6 +819,59 @@ class PrnMedicationPeriodSummary {
   final List<String> recentDateKeys;
 }
 
+// Shared validation/staging keeps both storage implementations all-or-nothing.
+List<MedicationLog> _buildMissingScheduledLogs({
+  required DateTime date,
+  required List<MedicationDoseItem> items,
+  required List<Medication> medications,
+  required List<MedicationLog> existingLogs,
+  required DateTime now,
+}) {
+  final selectedDate = DateTime(date.year, date.month, date.day);
+  if (selectedDate.isAfter(DateTime(now.year, now.month, now.day))) {
+    throw const FuturePrnMedicationDateException();
+  }
+  final medicationsById = {for (final med in medications) med.id: med};
+  final occupied = existingLogs.map((log) => log.uniqueKey).toSet();
+  final dateKey = MedicationLog.formatDateKey(selectedDate);
+  final additions = <MedicationLog>[];
+  for (final item in items) {
+    final medication = medicationsById[item.medication.id];
+    if (medication == null ||
+        !medication.isActive ||
+        !medication.isScheduledFor(item.timeSlot)) {
+      throw ArgumentError('Select a current active scheduled medication slot.');
+    }
+    final key = '${medication.id}|$dateKey|${item.timeSlot.value}';
+    if (!occupied.add(key)) continue;
+    final takenAt = item.timeSlot.defaultTakenAt(selectedDate);
+    if (takenAt == null) {
+      throw ArgumentError('This slot requires an explicitly entered time.');
+    }
+    if (takenAt.isAfter(now)) {
+      throw const FuturePrnMedicationTimeException();
+    }
+    additions.add(
+      MedicationLog(
+        // The timestamp prefix follows the existing convention; the complete
+        // natural key makes IDs distinct even when clock and takenAt are equal.
+        id: 'medlog-${now.microsecondsSinceEpoch}-${medication.id}-$dateKey-${item.timeSlot.value}',
+        medicationId: medication.id,
+        date: selectedDate,
+        timeSlot: item.timeSlot,
+        isTaken: true,
+        takenAt: takenAt,
+        doseSnapshot: medication.dose,
+        doseValueSnapshot: medication.doseValue,
+        doseUnitSnapshot: medication.doseUnit,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+  }
+  return additions;
+}
+
 class SqfliteMedicationStorage implements MedicationStorage {
   static const _medicationsTable = 'medications';
   static const _logsTable = 'medication_logs';
@@ -893,13 +1030,18 @@ class SqfliteMedicationStorage implements MedicationStorage {
   }
 
   @override
-  Future<void> upsertMedicationLog(MedicationLog log) async {
+  Future<void> upsertMedicationLog(
+    MedicationLog log, {
+    bool insertOnly = false,
+  }) async {
     final db = await _db;
     try {
       await db.insert(
         _logsTable,
         log.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
+        conflictAlgorithm: insertOnly
+            ? ConflictAlgorithm.abort
+            : ConflictAlgorithm.replace,
       );
     } on DatabaseException catch (error) {
       if (error.isUniqueConstraintError()) {
@@ -907,6 +1049,37 @@ class SqfliteMedicationStorage implements MedicationStorage {
       }
       rethrow;
     }
+  }
+
+  @override
+  Future<List<MedicationLog>> insertMissingScheduledLogs({
+    required DateTime date,
+    required List<MedicationDoseItem> items,
+    required DateTime now,
+  }) async {
+    final db = await _db;
+    return db.transaction((txn) async {
+      final medications = (await txn.query(_medicationsTable))
+          .map(Medication.fromMap)
+          .toList();
+      final logs = (await txn.query(
+        _logsTable,
+        where: 'date = ?',
+        whereArgs: [MedicationLog.formatDateKey(date)],
+      )).map(MedicationLog.fromMap).toList();
+      final additions = _buildMissingScheduledLogs(
+        date: date,
+        items: items,
+        medications: medications,
+        existingLogs: logs,
+        now: now,
+      );
+      for (final log in additions) {
+        // Plain INSERT: a conflict aborts the transaction, never replaces a row.
+        await txn.insert(_logsTable, log.toMap());
+      }
+      return [...logs, ...additions];
+    });
   }
 
   @override
@@ -987,6 +1160,30 @@ class InMemoryMedicationStorage implements MedicationStorage {
   final List<PrnMedicationLog> _prnLogs;
   final List<PrnSymptomLink> _prnSymptomLinks;
   final List<MedicationDoseHistory> _doseHistory;
+
+  @override
+  Future<List<MedicationLog>> insertMissingScheduledLogs({
+    required DateTime date,
+    required List<MedicationDoseItem> items,
+    required DateTime now,
+  }) async {
+    final logs = _logs
+        .where((log) => log.dateKey == MedicationLog.formatDateKey(date))
+        .toList();
+    final additions = _buildMissingScheduledLogs(
+      date: date,
+      items: items,
+      medications: _medications,
+      existingLogs: logs,
+      now: now,
+    );
+    final ids = _logs.map((log) => log.id).toSet();
+    for (final log in additions) {
+      if (!ids.add(log.id)) throw const DuplicateMedicationLogException();
+    }
+    _logs.addAll(additions);
+    return [...logs, ...additions];
+  }
 
   @override
   Future<List<Medication>> fetchActiveMedications() async {
@@ -1076,12 +1273,18 @@ class InMemoryMedicationStorage implements MedicationStorage {
   }
 
   @override
-  Future<void> upsertMedicationLog(MedicationLog log) async {
+  Future<void> upsertMedicationLog(
+    MedicationLog log, {
+    bool insertOnly = false,
+  }) async {
     final duplicateCount = _logs
         .where((item) => item.uniqueKey == log.uniqueKey)
         .length;
     final index = _logs.indexWhere((item) => item.uniqueKey == log.uniqueKey);
     if (duplicateCount > 1) {
+      throw const DuplicateMedicationLogException();
+    }
+    if (insertOnly && (index != -1 || _logs.any((item) => item.id == log.id))) {
       throw const DuplicateMedicationLogException();
     }
     if (index == -1) {

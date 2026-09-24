@@ -271,6 +271,25 @@ class _MutableMedicationStorage implements MedicationStorage {
   List<PrnSymptomLink> _prnSymptomLinks = [];
   List<MedicationDoseHistory> _doseHistory = [];
 
+  @override
+  Future<List<MedicationLog>> insertMissingScheduledLogs({
+    required DateTime date,
+    required List<MedicationDoseItem> items,
+    required DateTime now,
+  }) async {
+    final storage = InMemoryMedicationStorage(
+      medications: _medications,
+      logs: _logs,
+    );
+    final result = await storage.insertMissingScheduledLogs(
+      date: date,
+      items: items,
+      now: now,
+    );
+    _logs = await storage.fetchAllLogs();
+    return result;
+  }
+
   void replaceWith(BackupSnapshot snapshot) {
     _medications = List.of(snapshot.medications);
     _logs = List.of(snapshot.medicationLogs);
@@ -366,8 +385,14 @@ class _MutableMedicationStorage implements MedicationStorage {
   }
 
   @override
-  Future<void> upsertMedicationLog(MedicationLog log) async {
+  Future<void> upsertMedicationLog(
+    MedicationLog log, {
+    bool insertOnly = false,
+  }) async {
     final index = _logs.indexWhere((item) => item.uniqueKey == log.uniqueKey);
+    if (insertOnly && (index != -1 || _logs.any((item) => item.id == log.id))) {
+      throw const DuplicateMedicationLogException();
+    }
     if (index == -1) {
       _logs.add(log);
     } else {

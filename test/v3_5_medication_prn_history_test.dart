@@ -735,7 +735,10 @@ void main() {
         expect(log.date, past);
         expect(log.takenAt, DateTime(2026, 8, 20, 8, 30));
         expect(log.isTaken, isTrue);
-        expect(log.displayDoseSnapshot, isNull);
+        expect(log.doseSnapshot, medication.dose);
+        expect(log.doseValueSnapshot, medication.doseValue);
+        expect(log.doseUnitSnapshot, medication.doseUnit);
+        expect(log.displayDoseSnapshot, medication.displayDose);
       },
     );
 
@@ -761,6 +764,7 @@ void main() {
 
         final updated = await service.saveScheduledCorrection(
           medication: medication,
+          existingLog: (await service.allLogsForTest()).single,
           date: past,
           timeSlot: MedicationTimeSlot.morning,
           isTaken: false,

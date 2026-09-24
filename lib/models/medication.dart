@@ -9,6 +9,18 @@ enum MedicationTimeSlot {
   final String value;
   final String label;
 
+  /// Only confirmed defaults are eligible for automatic missing-log creation.
+  DateTime? defaultTakenAt(DateTime date) {
+    final hour = switch (this) {
+      MedicationTimeSlot.morning => 9,
+      MedicationTimeSlot.evening => 21,
+      MedicationTimeSlot.lunch || MedicationTimeSlot.bedtime => null,
+    };
+    return hour == null
+        ? null
+        : DateTime(date.year, date.month, date.day, hour);
+  }
+
   static MedicationTimeSlot fromValue(String value) {
     return MedicationTimeSlot.values.firstWhere((slot) => slot.value == value);
   }
